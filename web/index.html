@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Westward Trail</title>
+<style>
+  :root {
+    --bg: #14110d;
+    --panel: #221c15;
+    --ink: #f3e7cf;
+    --muted: #a8977a;
+    --accent: #e8a33d;
+    --bezel: #e2602a;
+    --ok: #7fd36b;
+    --bad: #ff7a6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  .device {
+    background: var(--bezel);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 10px 40px #0008, inset 0 -4px 0 #0003;
+    max-width: 100%;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #000;
+    border-radius: 4px;
+    width: min(960px, calc(100vw - 68px));
+    aspect-ratio: 240 / 135;
+    outline: none;
+  }
+  .brand {
+    display: flex;
+    justify-content: space-between;
+    color: #fff3;
+    font-size: 12px;
+    margin-top: 8px;
+    letter-spacing: 0.1em;
+  }
+  .bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 14px 0 6px;
+  }
+  button {
+    font: inherit;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid #4a3c2c;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 13px; text-align: center; max-width: 720px; }
+  kbd {
+    background: var(--panel);
+    border: 1px solid #4a3c2c;
+    border-radius: 4px;
+    padding: 0 5px;
+  }
+  #mod {
+    display: none;
+    width: min(960px, 100%);
+    margin-top: 10px;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  #mod.open { display: block; }
+  #mod textarea {
+    width: 100%;
+    height: 50vh;
+    background: #0d0b08;
+    color: var(--ink);
+    border: 1px solid #4a3c2c;
+    border-radius: 6px;
+    padding: 10px;
+    font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    tab-size: 4;
+  }
+  #status { margin-top: 6px; min-height: 1.4em; }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+  <div class="device">
+    <canvas id="screen" width="240" height="135" tabindex="0"></canvas>
+    <div class="brand"><span>CARDPUTER EDITION</span><span id="fps"></span></div>
+  </div>
+
+  <div class="bar">
+    <button id="sound">Sound: on</button>
+    <button id="restart">Restart</button>
+    <button id="modbtn">Mod editor</button>
+  </div>
+  <p class="hint">
+    Numbers pick menu choices, <kbd>Enter</kbd> continues. Hunting &amp; rafting: arrows or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>,
+    <kbd>Space</kbd> shoots. Real hackers press <kbd>`</kbd>.
+  </p>
+
+  <section id="mod">
+    <div class="hint" style="text-align:left;margin-bottom:8px">
+      This is the game's data file. Change landmarks, prices, animals, anything. Press <b>Apply</b> to restart with your mod.
+      It's saved in this browser.
+    </div>
+    <textarea id="modtext" spellcheck="false"></textarea>
+    <div class="bar" style="justify-content:flex-start">
+      <button id="apply">Apply</button>
+      <button id="reset">Load the original</button>
+    </div>
+    <div id="status"></div>
+  </section>
+
+  <script src="main.js"></script>
+</body>
+</html>

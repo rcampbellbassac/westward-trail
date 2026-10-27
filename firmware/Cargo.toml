@@ -1,0 +1,27 @@
+[package]
+name = "trail-firmware"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+# Cardputer Advanced: TCA8418 I2C keyboard. Untested on hardware so far.
+adv = []
+
+[dependencies]
+anyhow = "1"
+esp-idf-hal = { version = "0.45", features = ["rmt-legacy"] }
+esp-idf-svc = { version = "0.51", features = ["experimental"] }
+log = "0.4"
+mipidsi = "0.9"
+trail-core = { path = "../crates/trail-core" }
+
+[build-dependencies]
+embuild = "0.33"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[profile.dev]
+opt-level = "s"

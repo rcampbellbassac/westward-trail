@@ -1,0 +1,12 @@
+[package]
+name = "trail-core"
+description = "Platform-free game logic and 240x135 renderer shared by the web and Cardputer builds"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+embedded-graphics = "0.8"
+
+[lints]
+workspace = true

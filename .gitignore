@@ -1,0 +1,5 @@
+target/
+firmware/target/
+firmware/.embuild
+web/trail.wasm
+web/deploy.env

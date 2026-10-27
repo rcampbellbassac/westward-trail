@@ -1,0 +1,352 @@
+# ================================================================
+#  TRAIL DATA FILE  -  this is the game's "mod file"
+# ================================================================
+#  Everything about the trail lives here: the landmarks, how far
+#  apart they are, store prices, animals you can hunt, fish,
+#  sicknesses and the names the game suggests.
+#
+#  HOW TO HACK IT
+#   - Lines starting with # are comments. The game ignores them.
+#   - A word in [brackets] starts a new thing (a landmark, an animal...).
+#   - Below it, write   key = value   lines.
+#   - In the web version, open "Mod editor", change something,
+#     press "Apply". If you make a mistake the game tells you
+#     which line is wrong. On the Cardputer, rebuild the firmware.
+#
+#  IDEAS: make buffalo weigh 5000 pounds. Make oxen cost $1.
+#  Add a landmark called "My Secret Base" at mile 400.
+# ================================================================
+
+[settings]
+title = Westward Trail
+year = 1848
+
+# Prices at the first store. Forts farther west charge more.
+[store]
+name = Independence General Store
+oxen = 40.00
+food = 0.20
+clothing = 10.00
+ammo = 2.00
+part = 10.00
+
+# bonus multiplies your final score. skill gives a small advantage.
+[occupation]
+name = Banker from Boston
+cash = 1600
+bonus = 1
+skill = none
+about = Lots of money, but a small score bonus.
+
+[occupation]
+name = Carpenter from Ohio
+cash = 800
+bonus = 2
+skill = repair
+about = Better at fixing broken wagon parts.
+
+[occupation]
+name = Farmer from Illinois
+cash = 400
+bonus = 3
+skill = oxen
+about = Knows how to keep oxen healthy. Biggest score bonus.
+
+# ---------------------------------------------------------------
+# LANDMARKS - in order, with miles from Independence.
+#  kind:    town, fort, river, landmark, dalles, end
+#  terrain: plains, hills, mountains, desert, forest
+#           (the land you travel through AFTER this landmark)
+#  picture: town, fort, river, chimney, rock, mountains, springs, valley
+#  rivers:  depth (feet), width (feet), ferry (dollars, 0 = none),
+#           guide = yes  (a guide will help for 3 sets of clothing)
+#  talk:    things people say. Add as many as you like!
+# ---------------------------------------------------------------
+
+[landmark]
+name = Independence, Missouri
+mile = 0
+kind = town
+terrain = plains
+picture = town
+talk = Hundreds of wagons gather here every spring, waiting for the grass to grow tall enough for the oxen.
+talk = Don't overload your wagon. I've seen folks throw out pianos before they even reach Kansas!
+
+[landmark]
+name = Kansas River Crossing
+mile = 102
+kind = river
+terrain = plains
+picture = river
+depth = 4.5
+width = 620
+ferry = 5
+talk = The ferry men here charge five dollars, but it beats losing your flour in the river.
+talk = If the river is high, wait a day or two. It drops fast when the rain stops.
+
+[landmark]
+name = Big Blue River Crossing
+mile = 185
+kind = river
+terrain = plains
+picture = river
+depth = 3.0
+width = 220
+ferry = 0
+talk = No ferry here. Most folks ford it when it's shallow, or caulk the wagon and float.
+talk = My brother says to cross early in the morning, before the wind picks up.
+
+[landmark]
+name = Fort Kearney
+mile = 304
+kind = fort
+terrain = plains
+picture = fort
+talk = The soldiers here count every wagon that passes. They say thousands came through this year.
+talk = Buffalo herds are thick from here to Fort Laramie. Keep your rifle handy.
+
+[landmark]
+name = Chimney Rock
+mile = 554
+kind = landmark
+terrain = plains
+picture = chimney
+talk = You can see Chimney Rock for days before you reach it. It looks like a giant's chimney!
+talk = Folks carve their names at the bottom. Mine's down there somewhere.
+
+[landmark]
+name = Fort Laramie
+mile = 640
+kind = fort
+terrain = hills
+picture = fort
+talk = This is the last good place to fix your wagon before the mountains.
+talk = Prices are higher out here. Everything has to come by wagon, same as you.
+
+[landmark]
+name = Independence Rock
+mile = 830
+kind = landmark
+terrain = hills
+picture = rock
+talk = They say if you reach Independence Rock by the Fourth of July, you'll beat the snow.
+talk = Climb to the top! You can see for miles, and the names painted on it go back years.
+
+[landmark]
+name = South Pass
+mile = 932
+kind = landmark
+terrain = mountains
+picture = mountains
+talk = South Pass is so wide and gentle you hardly know you're crossing the Rocky Mountains.
+talk = From here on, the rivers run west toward the Pacific Ocean.
+
+[landmark]
+name = Green River Crossing
+mile = 1015
+kind = river
+terrain = mountains
+picture = river
+depth = 6.0
+width = 400
+ferry = 10
+talk = The Green River is deep and fast. Pay the ferry if you can afford it.
+talk = The water is cold even in summer. It comes straight from the snow up high.
+
+[landmark]
+name = Soda Springs
+mile = 1144
+kind = landmark
+terrain = mountains
+picture = springs
+talk = The water here bubbles like soda! Some say it tastes like lemonade without the sugar.
+talk = There's a spring called Steamboat Spring that puffs and hisses like an engine.
+
+[landmark]
+name = Fort Hall
+mile = 1201
+kind = fort
+terrain = desert
+picture = fort
+talk = The road ahead is dry and dusty. Fill every barrel you have with water.
+talk = The Shoshoni people trade fresh salmon here. It's the best fish I ever tasted.
+
+[landmark]
+name = Snake River Crossing
+mile = 1383
+kind = river
+terrain = desert
+picture = river
+depth = 6.5
+width = 1000
+ferry = 0
+guide = yes
+talk = The Snake River is the most dangerous crossing on the trail. Get help if you can.
+talk = A Shoshoni guide knows where the islands are. It's the safest way across.
+
+[landmark]
+name = Fort Boise
+mile = 1497
+kind = fort
+terrain = hills
+picture = fort
+talk = Almost there! But the Blue Mountains are still ahead, and they're steep.
+talk = If your oxen are tired, rest them here before the climb.
+
+[landmark]
+name = Blue Mountains
+mile = 1610
+kind = landmark
+terrain = forest
+picture = mountains
+talk = The trees here are taller than anything back east. You have to cut a path in places.
+talk = Watch for elk and bear in these woods.
+
+[landmark]
+name = Fort Walla Walla
+mile = 1680
+kind = fort
+terrain = hills
+picture = fort
+talk = Doctor Whitman's mission is near here. Travelers stop for medicine and rest.
+talk = Two more weeks to The Dalles if your wagon holds together.
+
+[landmark]
+name = The Dalles
+mile = 1830
+kind = dalles
+terrain = forest
+picture = river
+toll = 30
+talk = From here you can raft down the Columbia River, or pay the toll for the Barlow Road over the mountain.
+talk = The river is fast and full of rocks. The road is slow and steep. Neither is easy!
+
+[landmark]
+name = Willamette Valley, Oregon
+mile = 1930
+kind = end
+terrain = forest
+picture = valley
+talk = Welcome to Oregon! The soil here is the richest you've ever seen.
+
+# ---------------------------------------------------------------
+# ANIMALS for hunting
+#  speed:  pixels per second
+#  rarity: bigger number = shows up more often
+#  terrain: where they live (leave out for everywhere)
+#  sprite: squirrel, rabbit, deer, buffalo, bear, elk
+# ---------------------------------------------------------------
+
+[animal]
+name = squirrel
+min_lbs = 1
+max_lbs = 2
+speed = 45
+rarity = 30
+sprite = squirrel
+
+[animal]
+name = rabbit
+min_lbs = 2
+max_lbs = 5
+speed = 60
+rarity = 25
+terrain = plains, hills, forest, desert
+sprite = rabbit
+
+[animal]
+name = deer
+min_lbs = 40
+max_lbs = 90
+speed = 55
+rarity = 15
+terrain = plains, hills, forest, mountains
+sprite = deer
+
+[animal]
+name = pronghorn
+min_lbs = 40
+max_lbs = 70
+speed = 85
+rarity = 10
+terrain = plains, desert
+sprite = deer
+
+[animal]
+name = buffalo
+min_lbs = 350
+max_lbs = 500
+speed = 25
+rarity = 12
+terrain = plains, hills
+sprite = buffalo
+
+[animal]
+name = elk
+min_lbs = 150
+max_lbs = 300
+speed = 45
+rarity = 8
+terrain = mountains, forest, hills
+sprite = elk
+
+[animal]
+name = bear
+min_lbs = 100
+max_lbs = 350
+speed = 30
+rarity = 6
+terrain = mountains, forest
+sprite = bear
+
+# ---------------------------------------------------------------
+# FISH you can catch at rivers
+# ---------------------------------------------------------------
+
+[fish]
+name = trout
+min_lbs = 1
+max_lbs = 4
+
+[fish]
+name = catfish
+min_lbs = 2
+max_lbs = 9
+
+[fish]
+name = salmon
+min_lbs = 5
+max_lbs = 15
+
+[fish]
+name = old boot
+min_lbs = 0
+max_lbs = 0
+
+# ---------------------------------------------------------------
+# SICKNESSES. "gentle" is used in the gentle (younger pioneers) mode.
+# ---------------------------------------------------------------
+
+[illness]
+name = dysentery
+gentle = a tummy ache
+
+[illness]
+name = cholera
+gentle = a fever
+
+[illness]
+name = measles
+gentle = itchy spots
+
+[illness]
+name = typhoid
+gentle = the chills
+
+[illness]
+name = exhaustion
+gentle = sleepy legs
+
+# Names the game suggests if you just press ENTER.
+[names]
+list = Mary, Jed, Sarah, Zeke, Ruth, Abe, Clara, Henry, Lucy, Amos, Nell, Silas, Ada, Gus, Hattie, Cyrus

@@ -1,0 +1,12 @@
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="8MB"
+# The StampS3 USB-C connector exposes the ESP32-S3's fixed-function USB
+# Serial/JTAG peripheral. USB_CDC selects the separate USB-OTG controller and
+# caused a software reset as ESP-IDF entered application startup.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+CONFIG_FREERTOS_HZ=1000
+
+# Rust's std runtime, error formatting, embedded-graphics, and nested display
+# driver calls need more stack than ESP-IDF's small C-oriented default.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384

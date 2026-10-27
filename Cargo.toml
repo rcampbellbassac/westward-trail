@@ -1,0 +1,19 @@
+[workspace]
+members = ["crates/trail-core", "crates/trail-web"]
+exclude = ["firmware"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# `n % 2 == 0` reads more plainly to a young coder than `n.is_multiple_of(2)`.
+manual_is_multiple_of = "allow"
+needless_range_loop = "allow"
+
+[profile.release]
+opt-level = "s"
+lto = true
