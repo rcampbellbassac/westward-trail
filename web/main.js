@@ -71,6 +71,8 @@ function playBeeps() {
 function wakeAudio() {
   if (!audio) {
     try { audio = new AudioContext(); } catch { audio = null; }
+    // Sound is allowed now: play the title song if we're on the title.
+    if (audio && wasm) wasm.trail_title_song();
   } else if (audio.state === "suspended") {
     audio.resume();
   }

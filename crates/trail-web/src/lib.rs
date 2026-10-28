@@ -227,6 +227,12 @@ pub extern "C" fn trail_next_save() -> i32 {
     })
 }
 
+/// Play the title song if the title is showing (after the first key press).
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_title_song() {
+    with(|a| a.game.title_song());
+}
+
 /// Show the text-in buffer as a short note over the game.
 #[unsafe(no_mangle)]
 pub extern "C" fn trail_notify() {

@@ -422,6 +422,13 @@ impl Game {
         net::receive(self, line);
     }
 
+    /// Play the title song ("Oh! Susanna") if the title screen is showing.
+    /// Hardware calls this at power-on; browsers after the first key press,
+    /// since they don't allow sound before that.
+    pub fn title_song(&mut self) {
+        setup::title_song(self);
+    }
+
     /// Show a short note over the screen for a couple of seconds.
     pub fn notify(&mut self, text: impl Into<String>) {
         let mut text: String = text.into();

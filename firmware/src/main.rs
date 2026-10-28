@@ -149,6 +149,7 @@ fn run() -> Result<()> {
     let seed = unsafe { esp_idf_svc::sys::esp_random() };
     let mut game = Game::new(u64::from(seed));
     game.set_net_caps(true, true, "", "");
+    game.title_song();
     let mut frame = Frame::new();
     let mut last = Instant::now();
 

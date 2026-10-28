@@ -55,6 +55,56 @@ pub fn render_title(g: &Game, f: &mut Frame) {
     f.text(3, 126, "v0.1", gfx::rgb(60, 100, 40), Font::Small);
 }
 
+/// The opening of "Oh! Susanna" (Stephen Foster, 1848: the year of our trip).
+/// (Hz, ms) pairs; 0 Hz is a rest, used to split repeated notes.
+const SUSANNA: &[(u16, u16)] = &[
+    // I come from Al-a-bam-a with my ban-jo on my knee,
+    (523, 180),
+    (587, 180),
+    (659, 180),
+    (784, 160),
+    (0, 20),
+    (784, 270),
+    (880, 90),
+    (784, 180),
+    (659, 180),
+    (523, 270),
+    (587, 90),
+    (659, 160),
+    (0, 20),
+    (659, 180),
+    (587, 180),
+    (523, 180),
+    (587, 540),
+    (0, 180),
+    // I'm goin' to Lou'-si-an-a, my true love for to see.
+    (523, 180),
+    (587, 180),
+    (659, 180),
+    (784, 160),
+    (0, 20),
+    (784, 270),
+    (880, 90),
+    (784, 180),
+    (659, 180),
+    (523, 270),
+    (587, 90),
+    (659, 160),
+    (0, 20),
+    (659, 180),
+    (587, 160),
+    (0, 20),
+    (587, 180),
+    (523, 720),
+];
+
+/// Play the title song, if the title is showing.
+pub fn title_song(g: &mut Game) {
+    if matches!(g.scene, Scene::Title) {
+        g.tune(SUSANNA);
+    }
+}
+
 pub fn title_key(g: &mut Game, k: Key) -> Scene {
     match ui::digit(k) {
         Some(1) => {
