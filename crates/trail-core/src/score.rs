@@ -105,6 +105,7 @@ pub fn arrive(g: &mut Game) -> Scene {
         .get(g.t.occupation)
         .map_or(1, |o| o.bonus);
     let total = subtotal.saturating_mul(bonus);
+    crate::net::finished(g, total);
     lines.push((
         format!("Bonus for being a {}: x{bonus}", occupation_short(g)),
         0,
@@ -173,7 +174,10 @@ pub fn render_score(g: &Game, f: &mut Frame, lines: &[(String, u32)]) {
     ui::footer(f, "Press any key to see the Top Ten.");
 }
 
-pub fn after_score(_g: &mut Game) -> Scene {
+pub fn after_score(g: &mut Game) -> Scene {
+    if g.net.racing {
+        return Scene::Online(crate::net::Screen::Standings { last: true });
+    }
     Scene::TopTen
 }
 
@@ -202,6 +206,7 @@ pub fn render_top_ten(g: &Game, f: &mut Frame) {
 }
 
 pub fn game_over(g: &mut Game) -> Scene {
+    crate::net::wagon_lost(g);
     if g.t.mood == Mood::Gentle {
         g.say(
             "The trail is over",

@@ -1,7 +1,29 @@
 # Multiplayer plan
 
-Decided 2026-10-27. Nothing is built yet; work happens straight on `main`, behind a menu option, so the
+Decided 2026-10-27. Work happens straight on `main`, behind the title menu's "Play together", so the
 single-player game stays exactly as it is.
+
+## Status
+
+| Milestone | State |
+|---|---|
+| 1. Core: lobby, shared seed, race screens | **Done.** Tested with three games talking through a pretend relay. |
+| 2. `trail-relay` on a home computer | **Done** and running on our home server. Two browsers raced through it. |
+| 3. Cardputer host (hotspot, serves the web game, relays) | **Built, testing on hardware.** |
+| 4. Cardputers as players (join a hotspot or the home relay) | **Built, not yet tested** (needs a second device). |
+| 5-9 | Not started. The host menu lists the other modes as "coming soon". |
+
+### Try it
+
+- **Browsers at home:** `./web/build.sh`, then `cargo run --release -p trail-relay -- --web web` on a computer on
+  the home network. Everyone opens `http://<that computer>:8850`, picks **5. Play together**, one player hosts and
+  the others join. Cardputers on the home Wi-Fi pick **2. Join a game on Wi-Fi**, type the home network, and type the
+  relay computer's address once (it's remembered). On the same network segment they can leave it blank and it's found
+  automatically, but broadcasts don't cross VLANs.
+- **Cardputer host:** on the Cardputer, **5. Play together** then **1. Host a game on this Cardputer**. Phones and
+  computers join the Wi-Fi it shows (or scan the QR code) and open `http://192.168.4.1`. Another Cardputer picks
+  **2. Join a game on Wi-Fi** and types the same name and password.
+- The firmware embeds the web game, so run `./web/build.sh` before building the firmware.
 
 ## Goals
 

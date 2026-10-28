@@ -10,3 +10,12 @@ CONFIG_FREERTOS_HZ=1000
 # Rust's std runtime, error formatting, embedded-graphics, and nested display
 # driver calls need more stack than ESP-IDF's small C-oriented default.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Playing together: the hotspot's web server relays game lines over WebSockets,
+# and up to 8 players plus page loads need more sockets than the default 10.
+CONFIG_HTTPD_WS_SUPPORT=y
+CONFIG_LWIP_MAX_SOCKETS=16
+
+# SD cards: our copy of the fatfs component (components/fatfs) turns on exFAT,
+# which big cards ship with. exFAT needs long file names.
+CONFIG_FATFS_LFN_HEAP=y

@@ -8,6 +8,9 @@ use crate::{
     pictures, store, ui,
 };
 
+/// The months you can leave in, as on the month menu.
+pub const MONTH_NAMES: [&str; 5] = ["March", "April", "May", "June", "July"];
+
 const LEARN: [&str; 7] = [
     "In the 1840s, thousands of families packed everything they owned into covered wagons and set out from Independence, Missouri for Oregon's Willamette Valley, about 2,000 miles away.",
     "You'll buy supplies, cross rivers, hunt for food, and decide how fast to travel and how much to eat. Push too hard and your party gets sick. Go too slow and winter catches you in the mountains.",
@@ -46,6 +49,7 @@ pub fn render_title(g: &Game, f: &mut Frame) {
             "Learn about the trail",
             "See the Top Ten",
             "Load a saved trip",
+            "Play together",
         ],
     );
     f.text(3, 126, "v0.1", gfx::rgb(60, 100, 40), Font::Small);
@@ -60,6 +64,7 @@ pub fn title_key(g: &mut Game, k: Key) -> Scene {
         Some(2) => Scene::Learn(0),
         Some(3) => Scene::TopTen,
         Some(4) => crate::save::open(crate::save::SlotMode::Load),
+        Some(5) => crate::net::open(g),
         _ => Scene::Title,
     }
 }
@@ -112,6 +117,7 @@ pub fn mood_key(g: &mut Game, k: Key) -> Scene {
             };
         }
     };
+    crate::net::leave(g); // a trip of your own ends any race
     g.t = Trip::new();
     g.t.mood = mood;
     g.cheats.used = false;
@@ -142,7 +148,7 @@ pub fn occupation_key(g: &mut Game, k: Key) -> Scene {
             g.t.party.clear();
             Scene::Names {
                 idx: 0,
-                buf: String::new(),
+                buf: crate::net::leader_name(g),
             }
         }
         Some(i) if i == n + 1 => {
@@ -231,7 +237,7 @@ pub fn names_key(g: &mut Game, idx: usize, mut buf: String, k: Key) -> Scene {
     Scene::Names { idx, buf }
 }
 
-fn random_name(g: &mut Game) -> String {
+pub fn random_name(g: &mut Game) -> String {
     let unused: Vec<&String> = g
         .data
         .names
@@ -269,7 +275,11 @@ pub fn render_confirm_names(g: &Game, f: &mut Frame) {
 }
 
 pub fn confirm_names_key(g: &mut Game, k: Key) -> Scene {
-    if ui::yes(k) || k == Key::Enter {
+    if (ui::yes(k) || k == Key::Enter) && g.net.racing {
+        // Racers all leave in the month the host picked.
+        let month = char::from(b'0' + g.net.settings.month as u8);
+        month_key(g, Key::Char(month))
+    } else if ui::yes(k) || k == Key::Enter {
         Scene::Month
     } else if ui::no(k) {
         g.t.party.clear();

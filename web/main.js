@@ -140,6 +140,7 @@ function frame(now) {
   last = now;
   wasm.trail_tick(Math.round(dt));
   playBeeps();
+  sendNet();
   const ptr = wasm.trail_render();
   image.data.set(new Uint8Array(wasm.memory.buffer, ptr, image.data.length));
   ctx.putImageData(image, 0, 0);
@@ -156,6 +157,47 @@ function frame(now) {
     else if (kind < SLOTS) store.set(SLOT_KEY(kind), readText());
   }
   requestAnimationFrame(frame);
+}
+
+// ---- playing together ----
+// Only when the page came from a Westward Trail relay (it answers relay.json).
+// GitHub Pages and other plain hosts don't, so nothing connects there.
+let ws = null;
+let online = false;
+
+function connectRelay() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  try {
+    ws = new WebSocket(`${proto}//${location.host}/ws`);
+  } catch {
+    return;
+  }
+  ws.onopen = () => { online = true; wasm.trail_set_online(1); notify("Connected: play together!"); };
+  ws.onmessage = (e) => {
+    if (typeof e.data !== "string") return;
+    writeText(e.data);
+    wasm.trail_net_in();
+  };
+  ws.onclose = () => {
+    if (online) notify("Lost the connection");
+    online = false;
+    wasm.trail_set_online(0);
+    setTimeout(connectRelay, 3000);
+  };
+}
+
+async function maybeRelay() {
+  try {
+    const r = await fetch("relay.json", { cache: "no-store" });
+    if (r.ok && (await r.json()).relay) connectRelay();
+  } catch { /* not served by a relay */ }
+}
+
+function sendNet() {
+  while (wasm.trail_net_next()) {
+    const line = readText();
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(line);
+  }
 }
 
 // ---- saved trips & screenshots ----
@@ -280,6 +322,7 @@ showSound();
   image = ctx.createImageData(wasm.trail_width(), wasm.trail_height());
   if (!embedded) focusGame();
   requestAnimationFrame(frame);
+  maybeRelay();
 })().catch((err) => {
   ctx.fillStyle = "#fff";
   ctx.font = "10px monospace";

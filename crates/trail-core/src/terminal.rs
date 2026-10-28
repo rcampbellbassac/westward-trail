@@ -117,6 +117,14 @@ fn run(g: &mut Game, t: &mut TermState, cmd: &str) -> Option<Scene> {
     let arg = |i: usize| words.get(i).copied().unwrap_or("");
     let num = |i: usize| arg(i).parse::<u32>().ok();
     let lower = arg(0).to_ascii_lowercase();
+    const CHEATS: [&str; 13] = [
+        "give", "heal", "god", "ammo", "speed", "warp", "win", "weather", "seed", "hunt", "fish",
+        "raft", "forage",
+    ];
+    if g.net.cheats_blocked() && CHEATS.contains(&lower.as_str()) {
+        out(t, "The host turned cheats off for this race.");
+        return None;
+    }
     match lower.as_str() {
         "" => {}
         "help" | "?" => {

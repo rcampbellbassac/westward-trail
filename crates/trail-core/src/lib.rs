@@ -21,6 +21,7 @@ pub mod sprites;
 mod fish;
 mod forage;
 mod hunt;
+mod net;
 mod pictures;
 mod raft;
 mod river;
@@ -36,6 +37,7 @@ use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
 
 use data::TrailData;
 use gfx::{Frame, Theme};
+pub use net::{HostInfo, NetRequest};
 use rng::Rng;
 pub use save::{SLOTS, SaveOp, sequence as save_sequence};
 
@@ -215,6 +217,7 @@ pub(crate) enum Scene {
     GameOver,
     Terminal(Box<terminal::TermState>),
     Slots(save::SlotState),
+    Online(net::Screen),
 }
 
 pub struct Game {
@@ -239,6 +242,10 @@ pub struct Game {
     pub(crate) save_count: u32,
     /// Younger pioneers get the real-life plant safety talk once.
     pub(crate) forage_warned: bool,
+    /// Playing together: lobby, race, the lines to send.
+    pub(crate) net: net::Net,
+    /// A scene the network asked for (the race starting), applied next tick.
+    pub(crate) pending: Option<Scene>,
 }
 
 impl Game {
@@ -277,6 +284,8 @@ impl Game {
             toast: None,
             save_count: 0,
             forage_warned: false,
+            net: net::Net::new(seed),
+            pending: None,
         }
     }
 
@@ -313,6 +322,12 @@ impl Game {
             if *t == 0 {
                 self.toast = None;
             }
+        }
+        net::tick(self, ms);
+        if !matches!(self.scene, Scene::Terminal(_))
+            && let Some(scene) = self.pending.take()
+        {
+            self.scene = scene;
         }
         if !self.msgs.is_empty() {
             return;
@@ -365,6 +380,46 @@ impl Game {
     /// Saved trips and scores the platform should write down now.
     pub fn take_saves(&mut self) -> Vec<SaveOp> {
         save::take(self)
+    }
+
+    /// The platform tells the game whether the relay for playing together is reachable.
+    pub fn set_online(&mut self, online: bool) {
+        self.net.online = online;
+    }
+
+    /// What this platform's network can do (the Cardputer can host and join Wi-Fi games).
+    pub fn set_net_caps(&mut self, host: bool, join: bool, saved_ssid: &str, saved_relay: &str) {
+        self.net.caps = net::Caps {
+            host,
+            join,
+            saved_ssid: String::from(saved_ssid),
+            saved_relay: String::from(saved_relay),
+        };
+    }
+
+    /// Network jobs for the platform: start a hotspot, join a network.
+    pub fn take_net_requests(&mut self) -> Vec<NetRequest> {
+        core::mem::take(&mut self.net.requests)
+    }
+
+    /// The hotspot this platform is hosting, for the "how to join" screen.
+    pub fn set_host_info(&mut self, info: HostInfo) {
+        self.net.host_info = Some(info);
+    }
+
+    /// What the platform's network is doing, for the waiting screen.
+    pub fn set_net_status(&mut self, text: &str) {
+        self.net.status = String::from(text);
+    }
+
+    /// Lines for the platform to send to the relay.
+    pub fn take_net(&mut self) -> Vec<String> {
+        self.net.take()
+    }
+
+    /// One line that arrived from the relay.
+    pub fn net_in(&mut self, line: &str) {
+        net::receive(self, line);
     }
 
     /// Show a short note over the screen for a couple of seconds.
@@ -465,6 +520,7 @@ impl Game {
             Scene::GameOver => Scene::Title,
             Scene::Terminal(t) => terminal::key(self, t, k),
             Scene::Slots(s) => save::key(self, s, k),
+            Scene::Online(s) => net::key(self, s, k),
         }
     }
 
@@ -509,6 +565,7 @@ impl Game {
             Scene::GameOver => score::render_game_over(self, f),
             Scene::Terminal(_) => {}
             Scene::Slots(s) => save::render(self, f, s),
+            Scene::Online(s) => net::render(self, f, s),
         }
     }
 }
@@ -804,6 +861,156 @@ mod tests {
         g.key_down(Key::Char('g'));
         assert!(matches!(g.scene, Scene::SizeUp));
         assert!(!g.msgs.is_empty());
+    }
+
+    /// A pretend relay: every line one game sends reaches the others.
+    fn pump(games: &mut [&mut Game]) {
+        for _ in 0..3 {
+            let mut lines: Vec<(usize, String)> = Vec::new();
+            for (i, g) in games.iter_mut().enumerate() {
+                lines.extend(g.take_net().into_iter().map(|l| (i, l)));
+            }
+            for (from, l) in lines {
+                for (i, g) in games.iter_mut().enumerate() {
+                    if i != from {
+                        g.net_in(&l);
+                    }
+                }
+            }
+        }
+    }
+
+    fn type_in(g: &mut Game, s: &str) {
+        for c in s.chars() {
+            g.key_down(Key::Char(c));
+        }
+        g.key_down(Key::Enter);
+    }
+
+    fn clear_msgs(g: &mut Game) {
+        while !g.msgs.is_empty() {
+            g.key_down(Key::Enter);
+        }
+    }
+
+    /// From the start of a race to the first size-up screen.
+    fn race_setup(g: &mut Game) {
+        clear_msgs(g);
+        assert!(
+            matches!(g.scene, Scene::Occupation),
+            "race should start at occupations"
+        );
+        g.key_down(Key::Char('1'));
+        for _ in 0..5 {
+            g.key_down(Key::Enter);
+        }
+        g.key_down(Key::Char('y'));
+        clear_msgs(g);
+        assert!(
+            matches!(g.scene, Scene::Store(_)),
+            "racers skip the month menu"
+        );
+        for (item, qty) in [('1', "3"), ('2', "800")] {
+            g.key_down(Key::Char(item));
+            type_in(g, qty);
+            clear_msgs(g);
+        }
+        g.key_down(Key::Enter);
+        clear_msgs(g);
+        assert!(matches!(g.scene, Scene::SizeUp));
+    }
+
+    #[test]
+    fn two_players_race() {
+        let mut a = Game::new(1);
+        let mut b = Game::new(2);
+        let mut c = Game::new(3);
+        for g in [&mut a, &mut b, &mut c] {
+            g.set_online(true);
+            g.key_down(Key::Char('5'));
+        }
+        type_in(&mut a, "Ann");
+        type_in(&mut b, "Bob");
+        type_in(&mut c, "Cy");
+        // Ann hosts a race with cheats off, leaving in May.
+        a.key_down(Key::Char('1'));
+        a.key_down(Key::Char('4'));
+        a.key_down(Key::Char('3'));
+        a.key_down(Key::Enter);
+        assert!(matches!(a.scene, Scene::Online(net::Screen::Waiting)));
+        for g in [&mut a, &mut b, &mut c] {
+            g.tick(1600);
+        }
+        pump(&mut [&mut a, &mut b, &mut c]);
+        assert_eq!(b.net.lobbies.len(), 1, "Bob should see Ann's game");
+        assert_eq!(b.net.lobbies[0].name, "Ann");
+        b.key_down(Key::Char('2'));
+        c.key_down(Key::Char('2'));
+        pump(&mut [&mut a, &mut b, &mut c]);
+        assert_eq!(a.net.players.len(), 3);
+        assert_eq!(b.net.players.len(), 3, "Bob should get the whole roster");
+
+        // Cy changes their mind and leaves before the start.
+        c.key_down(Key::Escape);
+        pump(&mut [&mut a, &mut b, &mut c]);
+        assert_eq!(a.net.players.len(), 2);
+
+        a.key_down(Key::Enter);
+        pump(&mut [&mut a, &mut b, &mut c]);
+        b.tick(16);
+        assert!(a.net.racing && b.net.racing && !c.net.racing);
+        assert_eq!(a.rng.state(), b.rng.state(), "racers share the same luck");
+        assert!(!b.net.settings.cheats);
+
+        race_setup(&mut a);
+        race_setup(&mut b);
+        assert_eq!(a.t.party[0].name, "Ann", "the leader is the player");
+        assert_eq!(a.t.day, b.t.day, "everyone leaves in the host's month");
+        assert_eq!(ui::month_index(&a), 4, "May");
+
+        // Cheats are off: the terminal refuses.
+        b.key_down(Key::Char('`'));
+        type_in(&mut b, "give food 9999");
+        b.key_down(Key::Escape);
+        assert!(b.t.sup.food < 9000);
+        assert!(!b.cheats.used);
+
+        // Ann drives ahead; Bob's standings see it.
+        a.key_down(Key::Char('1'));
+        for _ in 0..400 {
+            a.tick(100);
+            b.tick(100);
+            clear_msgs(&mut a);
+            if matches!(a.scene, Scene::SizeUp) {
+                a.key_down(Key::Char('1'));
+            }
+            pump(&mut [&mut a, &mut b]);
+        }
+        let ann = b.net.players.iter().find(|p| p.name == "Ann").unwrap();
+        assert!(ann.miles > 0, "Bob should see Ann's progress");
+        b.key_down(Key::Char('r'));
+        assert!(matches!(
+            b.scene,
+            Scene::Online(net::Screen::Standings { .. })
+        ));
+        let mut f = Frame::new();
+        b.render(&mut f);
+        b.key_down(Key::Char('m'));
+        b.key_down(Key::Char('1'));
+        pump(&mut [&mut a, &mut b]);
+        assert!(
+            a.toast
+                .as_ref()
+                .is_some_and(|(t, _)| t.contains("Race you"))
+        );
+    }
+
+    #[test]
+    fn offline_play_together_explains() {
+        let mut g = Game::new(1);
+        g.key_down(Key::Char('5'));
+        assert!(matches!(g.scene, Scene::Online(net::Screen::Offline)));
+        assert!(g.take_net().is_empty());
     }
 
     #[test]

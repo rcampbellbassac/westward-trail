@@ -1,0 +1,12 @@
+[package]
+name = "trail-relay"
+description = "Serves the Westward Trail web game on a home network and passes multiplayer messages between players."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+tungstenite = "0.26"
+
+[lints]
+workspace = true

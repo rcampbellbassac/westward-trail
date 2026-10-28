@@ -25,6 +25,8 @@ project isn't affiliated with them. The code, text and pixel art here are origin
   internal flash plus `WESTWARD/SAVE1.TXT`..`SAVE5.TXT` on the SD card (the newest copy wins at start-up; an edited save
   keeps its `saved = N` number, so a tie goes to the card and edits on a computer load)
 - **Screenshots**: the Screenshot button on the web, Fn+P on the Cardputer (`WESTWARD/SHOT0001.BMP` on the SD card)
+- SD cards can be **FAT32 or exFAT**. `firmware/components/fatfs` is ESP-IDF's FatFs component with exFAT switched on
+  (`FF_FS_EXFAT 1` in `src/ffconf.h`); it replaces the built-in copy. Its files keep their own licenses.
 - Trading, resting, the trail map, scoring with the occupation bonus, the Top Ten
 - The secret **TRAIL-OS hacker terminal** (press `` ` ``) and a **mod editor** for the trail data
 
@@ -48,6 +50,7 @@ DEPLOY_URL=https://trail.example.com/
 | `crates/trail-core/data/trail.txt` | The mod file: landmarks, prices, animals, fish, illnesses, names |
 | `crates/trail-core/src/sprites.rs` | Pixel art drawn with letters |
 | `crates/trail-web` + `web/` | WebAssembly exports and the web page |
+| `crates/trail-relay` | Home-network server for playing together: serves the web game and relays moves |
 | `firmware/` | Cardputer firmware (ESP-IDF, Rust `esp` toolchain) |
 | `docs/HACKING.md` | Guide for young hackers |
 
@@ -89,7 +92,9 @@ cargo run -p trail-core --example screens -- /tmp/shots   # PPM screenshots of e
 - Web page verified in Node (all exports, mod loading, error messages); not yet clicked through in a browser.
 - Flashed to both Cardputers on 2026-10-27. The Advanced build (keyboard mapping and ES8311 codec setup
   taken from M5Stack's M5Cardputer/M5Unified code) boots and plays; a full playthrough on each is still to do.
-- Multiplayer is planned (race, wagon train, democracy and more, up to 8 players), not built yet: see `docs/MULTIPLAYER.md`.
+- **Playing together** (title menu 5): the wagon race works in browsers through `trail-relay` on a home computer, and a
+  Cardputer can host its own hotspot that phones join in a browser. Wagon train, democracy and the rest are next.
+  See `docs/MULTIPLAYER.md`.
 - Ideas next: trail forks (Sublette Cutoff, Fort Walla Walla vs. The Dalles), tombstones with epitaphs
   saved for the next player, saving a trip in progress, high scores on the Cardputer's SD card.
 

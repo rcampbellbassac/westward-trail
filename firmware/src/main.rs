@@ -6,6 +6,7 @@
 //! Display, keyboard and speaker setup follow the tested CardputerPDA firmware.
 
 mod keyboard;
+mod netlink;
 mod storage;
 
 use anyhow::Result;
@@ -15,7 +16,7 @@ use esp_idf_hal::{
     peripherals::Peripherals,
     spi::{config::Config as SpiConfig, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
 };
-use esp_idf_svc::log::EspLogger;
+use esp_idf_svc::{eventloop::EspSystemEventLoop, log::EspLogger, nvs::EspDefaultNvsPartition};
 use mipidsi::{
     interface::SpiInterface,
     models::ST7789,
@@ -28,7 +29,7 @@ use std::{
 };
 use trail_core::{
     gfx::{color_from_raw, Frame, H, W},
-    Beep, Game,
+    Beep, Game, NetRequest,
 };
 
 /// Aim for ~30 frames a second; the full-screen SPI transfer takes ~7 ms.
@@ -48,6 +49,8 @@ fn main() {
 
 fn run() -> Result<()> {
     let p = Peripherals::take()?;
+    let nvs = EspDefaultNvsPartition::take().ok();
+    let sysloop = EspSystemEventLoop::take()?;
 
     // Display: SCK 36, MOSI 35, CS 37, D/C 34, reset 33, backlight 38 (same on both models).
     let display_driver = SpiDriver::new(
@@ -126,11 +129,26 @@ fn run() -> Result<()> {
     std::thread::Builder::new()
         .name("trail-storage".into())
         .stack_size(16 * 1024)
-        .spawn(move || storage::run(sd, event_tx, save_rx))?;
+        .spawn({
+            let nvs = nvs.clone();
+            move || storage::run(sd, nvs, event_tx, save_rx)
+        })?;
+
+    // Playing together over Wi-Fi: host a hotspot, or join one.
+    let (net_tx, net_events) = mpsc::channel::<netlink::Event>();
+    let (link_tx, link_rx) = mpsc::channel::<netlink::Command>();
+    if let Some(nvs) = nvs {
+        let modem = p.modem;
+        std::thread::Builder::new()
+            .name("trail-net".into())
+            .stack_size(16 * 1024)
+            .spawn(move || netlink::run(modem, sysloop, nvs, net_tx, link_rx))?;
+    }
     let mut next_shot: Option<u32> = None;
 
     let seed = unsafe { esp_idf_svc::sys::esp_random() };
     let mut game = Game::new(u64::from(seed));
+    game.set_net_caps(true, true, "", "");
     let mut frame = Frame::new();
     let mut last = Instant::now();
 
@@ -142,6 +160,17 @@ fn run() -> Result<()> {
                 storage::Event::Scores(text) => game.import_scores(&text),
                 storage::Event::SdReady(n) => next_shot = Some(n),
                 storage::Event::Note(text) => game.notify(text),
+            }
+        }
+        while let Ok(event) = net_events.try_recv() {
+            match event {
+                netlink::Event::Online(on) => game.set_online(on),
+                netlink::Event::HostInfo(info) => game.set_host_info(info),
+                netlink::Event::Status(text) => game.set_net_status(&text),
+                netlink::Event::Line(line) => game.net_in(&line),
+                netlink::Event::SavedNetwork(ssid, relay) => {
+                    game.set_net_caps(true, true, &ssid, &relay)
+                }
             }
         }
         for event in keys.poll()? {
@@ -172,6 +201,23 @@ fn run() -> Result<()> {
         }
         for op in game.take_saves() {
             let _ = save_tx.send(op);
+        }
+        for request in game.take_net_requests() {
+            let _ = link_tx.send(match request {
+                NetRequest::Host => netlink::Command::Host,
+                NetRequest::Join {
+                    ssid,
+                    password,
+                    relay,
+                } => netlink::Command::Join {
+                    ssid,
+                    password,
+                    relay,
+                },
+            });
+        }
+        for line in game.take_net() {
+            let _ = link_tx.send(netlink::Command::Send(line));
         }
         game.render(&mut frame);
         let pixels = frame.px.iter().map(|&raw| color_from_raw(raw));

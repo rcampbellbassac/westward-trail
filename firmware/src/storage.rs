@@ -89,8 +89,9 @@ fn with_text(op: &SaveOp, t: String) -> SaveOp {
     }
 }
 
-fn open_nvs() -> Result<EspNvs<NvsDefault>> {
-    Ok(EspNvs::new(EspDefaultNvsPartition::take()?, "trail", true)?)
+fn open_nvs(partition: Option<EspDefaultNvsPartition>) -> Result<EspNvs<NvsDefault>> {
+    let partition = partition.ok_or_else(|| anyhow::anyhow!("no NVS partition"))?;
+    Ok(EspNvs::new(partition, "trail", true)?)
 }
 
 fn open_sd(pins: SdPins) -> Result<Fatfs<SdCardDriver<SdSpiHostDriver<'static, SpiDriver<'static>>>>> {
@@ -131,8 +132,13 @@ fn next_shot() -> u32 {
 }
 
 /// Runs forever on its own thread: loads saves, then writes whatever the game sends.
-pub fn run(pins: SdPins, events: Sender<Event>, commands: Receiver<SaveOp>) {
-    let mut nvs = match open_nvs() {
+pub fn run(
+    pins: SdPins,
+    partition: Option<EspDefaultNvsPartition>,
+    events: Sender<Event>,
+    commands: Receiver<SaveOp>,
+) {
+    let mut nvs = match open_nvs(partition) {
         Ok(nvs) => Some(nvs),
         Err(e) => {
             log::warn!("internal save storage unavailable: {e:#}");
@@ -160,7 +166,9 @@ pub fn run(pins: SdPins, events: Sender<Event>, commands: Receiver<SaveOp>) {
         Ok(mount) => match fs::create_dir_all(DIR) {
             Ok(()) => Some(mount),
             Err(e) => {
+                // Usually a card formatted exFAT; the Cardputer can only read FAT32.
                 log::warn!("SD card: can't make {DIR}: {e}");
+                let _ = events.send(Event::Note(String::from("SD card unreadable: use FAT32")));
                 None
             }
         },

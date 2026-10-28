@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/trail-core", "crates/trail-web"]
+members = ["crates/trail-core", "crates/trail-web", "crates/trail-relay"]
 exclude = ["firmware"]
 resolver = "2"
 

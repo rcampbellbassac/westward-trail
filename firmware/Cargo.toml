@@ -14,6 +14,7 @@ esp-idf-hal = { version = "0.45", features = ["rmt-legacy"] }
 esp-idf-svc = { version = "0.51", features = ["experimental"] }
 log = "0.4"
 mipidsi = "0.9"
+qrcodegen = "1.8"
 trail-core = { path = "../crates/trail-core" }
 
 [build-dependencies]
@@ -25,3 +26,7 @@ lto = true
 
 [profile.dev]
 opt-level = "s"
+
+# Our copy of ESP-IDF's fatfs component, with exFAT switched on, replaces the built-in one.
+[[package.metadata.esp-idf-sys.extra_components]]
+component_dirs = ["components/fatfs"]

@@ -19,6 +19,9 @@ struct App {
     text_out: String,
     beeps: Vec<u32>,
     saves: Vec<SaveOp>,
+    net_out: Vec<String>,
+    /// Connected to a relay; survives restarts and mods, which make a new Game.
+    online: bool,
     seed: u64,
 }
 
@@ -37,6 +40,8 @@ fn with<R>(f: impl FnOnce(&mut App) -> R) -> R {
             text_out: String::new(),
             beeps: Vec::new(),
             saves: Vec::new(),
+            net_out: Vec::new(),
+            online: false,
             seed: 1,
         });
         f(app)
@@ -64,6 +69,7 @@ pub extern "C" fn trail_init(seed: u32) {
         let scores = a.game.export_scores();
         a.game = Game::new(a.seed);
         a.game.import_scores(&scores);
+        a.game.set_online(a.online);
     });
 }
 
@@ -164,6 +170,7 @@ pub extern "C" fn trail_load_mod() -> u32 {
         match Game::with_data(&src, a.seed) {
             Ok(mut game) => {
                 game.import_scores(&a.game.export_scores());
+                game.set_online(a.online);
                 a.game = game;
                 a.text_out = String::from("Mod loaded! New trail is ready.");
                 1
@@ -227,4 +234,35 @@ pub extern "C" fn trail_notify() {
         let s = String::from_utf8_lossy(&a.text_in).into_owned();
         a.game.notify(s);
     });
+}
+
+/// Tell the game whether the relay for playing together is connected (1) or not (0).
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_set_online(online: u32) {
+    with(|a| {
+        a.online = online != 0;
+        a.game.set_online(a.online);
+    });
+}
+
+/// One line from the relay, in the text-in buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_net_in() {
+    with(|a| {
+        let s = String::from_utf8_lossy(&a.text_in).into_owned();
+        a.game.net_in(&s);
+    });
+}
+
+/// The next line to send to the relay: returns 1 with it in text-out, or 0 when there are none.
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_net_next() -> u32 {
+    with(|a| {
+        a.net_out.extend(a.game.take_net());
+        if a.net_out.is_empty() {
+            return 0;
+        }
+        a.text_out = a.net_out.remove(0);
+        1
+    })
 }

@@ -297,6 +297,9 @@ fn travel_day(g: &mut Game) -> Option<Scene> {
 pub fn arrive_at(g: &mut Game, idx: usize) -> Scene {
     let l = &g.data.landmarks[idx];
     let (name, kind, mile) = (l.name.clone(), l.kind, l.mile);
+    if kind != Kind::End {
+        crate::net::news(g, &format!("reached {name}"));
+    }
     g.t.at = Some(idx);
     g.t.next = idx + 1;
     g.t.miles = mile;
@@ -637,6 +640,7 @@ pub fn render_travel(g: &Game, f: &mut Frame, acc_ms: u32) {
         }
         Precip::Clear => {}
     }
+    crate::net::render_strip(g, f, 68);
     f.label(
         3,
         2,
@@ -774,7 +778,11 @@ pub fn render_sizeup(g: &Game, f: &mut Frame) {
         items.push(String::from("F. Go fishing"));
     }
     items.push(String::from("G. Gather food"));
-    items.push(String::from("S. Save trip"));
+    if g.net.racing {
+        items.push(String::from("R. Race standings"));
+    } else {
+        items.push(String::from("S. Save trip"));
+    }
     let per_col = items.len().div_ceil(2);
     for (i, s) in items.iter().enumerate() {
         let x = if i < per_col { 2 } else { 126 };
@@ -812,7 +820,12 @@ pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
             return Scene::Fish(alloc::boxed::Box::default());
         }
         Key::Char('g' | 'G') => return crate::forage::start(g),
-        Key::Char('s' | 'S') => return crate::save::open(crate::save::SlotMode::Save),
+        Key::Char('r' | 'R') if g.net.racing => {
+            return Scene::Online(crate::net::Screen::Standings { last: false });
+        }
+        Key::Char('s' | 'S') if !g.net.racing => {
+            return crate::save::open(crate::save::SlotMode::Save);
+        }
         _ => {}
     }
     let acts = actions(g);
@@ -896,6 +909,25 @@ fn map_point(g: &Game, mile: u32, i: i32) -> Point {
     Point::new(x, y)
 }
 
+/// The spot on the map for a number of miles along the trail.
+fn map_at(g: &Game, miles: u32) -> Point {
+    let lms = &g.data.landmarks;
+    let next = lms
+        .iter()
+        .position(|l| l.mile > miles)
+        .unwrap_or(lms.len() - 1)
+        .max(1);
+    let prev = next - 1;
+    let a = map_point(g, lms[prev].mile, prev as i32);
+    let b = map_point(g, lms[next].mile, next as i32);
+    let span = lms[next].mile.saturating_sub(lms[prev].mile).max(1) as i32;
+    let done = miles.saturating_sub(lms[prev].mile).min(span as u32) as i32;
+    Point::new(
+        a.x + (b.x - a.x) * done / span,
+        a.y + (b.y - a.y) * done / span,
+    )
+}
+
 pub fn render_map(g: &Game, f: &mut Frame) {
     ui::header(f, "Map of the trail");
     f.rect(0, 12, W, 113, gfx::rgb(200, 180, 130));
@@ -932,6 +964,12 @@ pub fn render_map(g: &Game, f: &mut Frame) {
         a.x + (b.x - a.x) * done / span,
         a.y + (b.y - a.y) * done / span,
     );
+    // Other racers' wagons, each in their own color.
+    for (miles, color, _) in crate::net::others(g) {
+        let p = map_at(g, miles);
+        f.rect(p.x - 2, p.y - 2, 4, 4, color);
+        f.outline(p.x - 3, p.y - 3, 6, 6, gfx::BLACK);
+    }
     if (g.clock / 300) % 2 == 0 {
         f.rect(here.x - 2, here.y - 2, 5, 5, gfx::RED);
     }
