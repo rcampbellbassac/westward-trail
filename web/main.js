@@ -14,6 +14,10 @@ const ctx = canvas.getContext("2d");
 const modPanel = document.getElementById("mod");
 const modText = document.getElementById("modtext");
 const statusEl = document.getElementById("status");
+// On the play page the game owns the keyboard. Embedded in a bigger page
+// (<canvas data-embedded>), it only listens while the canvas has focus.
+const embedded = canvas.hasAttribute("data-embedded");
+const focusGame = () => canvas.focus({ preventScroll: true });
 
 let wasm, image;
 const enc = new TextEncoder();
@@ -82,7 +86,16 @@ function keyCode(e) {
   return null;
 }
 
+const held = new Set();
+
+function send(code, down) {
+  if (down) held.add(code); else held.delete(code);
+  wasm.trail_key(code, down ? 1 : 0);
+}
+
 function onKey(e, down) {
+  if (!wasm) return;
+  if (embedded && document.activeElement !== canvas) return;
   if (modPanel.contains(document.activeElement) && document.activeElement !== canvas) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const code = keyCode(e);
@@ -90,12 +103,30 @@ function onKey(e, down) {
   e.preventDefault();
   if (down) wakeAudio();
   if (down && e.repeat && code !== 8) return;
-  wasm.trail_key(code, down ? 1 : 0);
+  send(code, down);
 }
 
 window.addEventListener("keydown", (e) => onKey(e, true));
 window.addEventListener("keyup", (e) => onKey(e, false));
-canvas.addEventListener("pointerdown", () => { canvas.focus(); wakeAudio(); });
+canvas.addEventListener("pointerdown", () => { focusGame(); wakeAudio(); });
+// Let go of held keys when the game loses focus, so the hunter doesn't keep walking.
+canvas.addEventListener("blur", () => { for (const code of [...held]) send(code, false); });
+
+// On-screen keys for phones and tablets: <button data-key="1">, data-key="Enter", ...
+for (const btn of document.querySelectorAll("[data-key]")) {
+  const k = btn.dataset.key;
+  const code = k in SPECIAL ? SPECIAL[k] : k.codePointAt(0);
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!wasm) return;
+    wakeAudio();
+    focusGame();
+    send(code, true);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
+    btn.addEventListener(ev, () => { if (wasm && held.has(code)) send(code, false); });
+  }
+}
 
 // ---- main loop ----
 let last = performance.now();
@@ -148,7 +179,7 @@ document.getElementById("modbtn").onclick = () => {
 document.getElementById("apply").onclick = () => {
   if (applyMod(modText.value)) {
     store.set(MOD_KEY, modText.value);
-    canvas.focus();
+    focusGame();
   }
 };
 
@@ -163,7 +194,7 @@ document.getElementById("restart").onclick = () => {
   const mod = store.get(MOD_KEY);
   wasm.trail_init(Date.now() >>> 0);
   if (mod) applyMod(mod, true);
-  canvas.focus();
+  focusGame();
 };
 
 const soundBtn = document.getElementById("sound");
@@ -173,7 +204,7 @@ soundBtn.onclick = () => {
   store.set("trail.sound", soundOn ? "on" : "off");
   showSound();
   wakeAudio();
-  canvas.focus();
+  focusGame();
 };
 showSound();
 
@@ -194,7 +225,7 @@ showSound();
     modText.value = mod;
   }
   image = ctx.createImageData(wasm.trail_width(), wasm.trail_height());
-  canvas.focus();
+  if (!embedded) focusGame();
   requestAnimationFrame(frame);
 })().catch((err) => {
   ctx.fillStyle = "#fff";

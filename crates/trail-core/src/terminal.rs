@@ -10,7 +10,7 @@ use crate::{
 };
 
 const HELP: &[&str] = &[
-    "give food|ammo|cash|oxen|clothes|parts N",
+    "give food|ammo|cash|oxen|cloth|parts N",
     "heal    god     ammo    peek    seed N",
     "speed 1-10    warp MILES    win",
     "weather clear|rain|snow|hot|cold",
@@ -135,7 +135,7 @@ fn run(g: &mut Game, t: &mut TermState, cmd: &str) -> Option<Scene> {
                 "ammo" | "bullets" => s.ammo = s.ammo.saturating_add(n),
                 "cash" | "money" => s.cash = s.cash.saturating_add(n.saturating_mul(100)),
                 "oxen" | "ox" => s.oxen = s.oxen.saturating_add(n),
-                "clothing" | "clothes" => s.clothing = s.clothing.saturating_add(n),
+                "clothing" | "clothes" | "cloth" => s.clothing = s.clothing.saturating_add(n),
                 "parts" => {
                     s.wheels += n.min(99);
                     s.axles += n.min(99);

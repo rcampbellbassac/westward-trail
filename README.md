@@ -4,6 +4,8 @@ A kid-friendly wagon-trail game, inspired by the 1980s classic *The Oregon Trail
 (original and Advanced). One Rust game crate draws every frame at the Cardputer's 240x135 resolution;
 the web page scales it up, the Cardputer shows it as-is.
 
+**Play it in your browser: https://rcampbellbassac.github.io/westward-trail/**
+
 Made for a family's kids to play and tinker with. *The Oregon Trail* is a trademark of its owners; this
 project isn't affiliated with them. The code, text and pixel art here are original, and the history
 (landmarks, rivers, forts, the people in the starting Top Ten) is the real 1848 trail.
@@ -22,7 +24,10 @@ project isn't affiliated with them. The code, text and pixel art here are origin
 
 ## Hosting it
 
-The web build is three static files (`web/index.html`, `main.js`, `trail.wasm`); any static web server works.
+GitHub Pages builds `site/` (landing page with the game built in, plus `play/`) on every push to `main`;
+run `./site/build.sh` to build the same site locally in `dist/`.
+
+To host it yourself: the web build is three static files (`web/index.html`, `main.js`, `trail.wasm`); any static web server works.
 `./web/deploy.sh` rebuilds and rsyncs them to the server named in `web/deploy.env` (not committed):
 
 ```sh
