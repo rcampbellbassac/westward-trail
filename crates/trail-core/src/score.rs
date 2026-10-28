@@ -132,6 +132,7 @@ pub fn arrive(g: &mut Game) -> Scene {
             },
         );
         g.top.truncate(10);
+        g.saves.push(crate::SaveOp::Scores(export(&g.top)));
     }
     Scene::Score(lines)
 }

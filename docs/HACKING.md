@@ -21,6 +21,15 @@ change something, press **Apply**. Ideas:
 
 If you make a mistake, the game tells you the line number. Fix it and press Apply again.
 
+Plants you can gather are `[plant]` sections. `miles = 0-640` is where it grows and `months = 5-7` is
+when it's ripe (May to July). Make strawberries grow all year, or invent a candy bush.
+
+## 2½. Hack a saved game
+
+Saved trips are plain text too. On the Cardputer with an SD card, they're `WESTWARD/SAVE1.TXT` to
+`SAVE5.TXT`. Open one on a computer, change `food = 300` to `food = 9999`, put the card back, and load
+the trip. Leave the `saved = ...` line alone: it tells the Cardputer which copy is newest. (In the browser they live in the page's storage, so the terminal is easier there.)
+
 ## 3. Redraw the pictures
 
 `crates/trail-core/src/sprites.rs` has the pictures drawn with letters: `b` is brown, `w` white,
@@ -43,5 +52,6 @@ Copy it, change the word and the message, rebuild. Then make one that *does* som
 - How people get sick: `illness` in `travel.rs`
 - Random events (thieves, broken wheels, wild berries): `random_event` in `travel.rs`
 - Hunting time limit and how much you can carry: the top of `hunt.rs`
+- Gathering time, basket size and what poisonous plants do: `forage.rs`
 
 Run `cargo test -p trail-core` after big changes. A robot plays 40 whole trips to check nothing broke.

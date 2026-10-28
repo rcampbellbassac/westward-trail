@@ -8,6 +8,15 @@ impl Rng {
         Self((seed ^ 0x9E37_79B9_7F4A_7C15) | 1)
     }
 
+    /// The generator's whole state, for saved games.
+    pub fn state(&self) -> u64 {
+        self.0
+    }
+
+    pub fn from_state(state: u64) -> Self {
+        Self(state | 1)
+    }
+
     pub fn next_u32(&mut self) -> u32 {
         let mut x = self.0;
         x ^= x >> 12;

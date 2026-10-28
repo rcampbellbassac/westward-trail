@@ -8,10 +8,12 @@ use crate::{
     pictures, store, ui,
 };
 
-const LEARN: [&str; 5] = [
+const LEARN: [&str; 7] = [
     "In the 1840s, thousands of families packed everything they owned into covered wagons and set out from Independence, Missouri for Oregon's Willamette Valley, about 2,000 miles away.",
     "You'll buy supplies, cross rivers, hunt for food, and decide how fast to travel and how much to eat. Push too hard and your party gets sick. Go too slow and winter catches you in the mountains.",
     "Leave too early and there's no grass for the oxen. Leave too late and you'll meet snow. Keep an eye on your food, your clothing, and everyone's health.",
+    "Pioneers also gathered wild food: berries, roots and mushrooms. What grows changes as you travel west and as the months go by. Press G on the trail. In real life, never eat a wild plant unless a grown-up who knows plants says it's safe!",
+    "Press S on the trail to save your trip in one of five slots, and pick \"Load a saved trip\" on the title screen to keep going later. On the Cardputer, Fn+P saves a screenshot to the SD card.",
     "Controls: number keys pick menu choices, ENTER continues. Hunting and rafting: arrow keys or W A S D move (on the Cardputer, ; , . / work too). SPACE shoots or reels in.",
     "Psst... real pioneers fixed their own wagons. Real hackers fix their own games. Press the ` key (top left) and type  help",
 ];
@@ -43,6 +45,7 @@ pub fn render_title(g: &Game, f: &mut Frame) {
             "Travel the trail",
             "Learn about the trail",
             "See the Top Ten",
+            "Load a saved trip",
         ],
     );
     f.text(3, 126, "v0.1", gfx::rgb(60, 100, 40), Font::Small);
@@ -56,6 +59,7 @@ pub fn title_key(g: &mut Game, k: Key) -> Scene {
         }
         Some(2) => Scene::Learn(0),
         Some(3) => Scene::TopTen,
+        Some(4) => crate::save::open(crate::save::SlotMode::Load),
         _ => Scene::Title,
     }
 }

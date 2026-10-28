@@ -16,6 +16,8 @@ use crate::sprites::Sprite;
 
 pub const W: i32 = 240;
 pub const H: i32 = 135;
+/// Bytes in a screenshot BMP: a 54-byte header and 3 bytes per pixel.
+pub const BMP_SIZE: usize = 54 + (W * H * 3) as usize;
 
 pub type Color = Rgb565;
 
@@ -177,6 +179,77 @@ impl Frame {
                 };
                 self.pixel(x + dx, y + dy, tint.unwrap_or(c));
             }
+        }
+    }
+
+    /// Draw a sprite whose `x` pixels take the given color (berries, caps, flowers).
+    pub fn sprite_accent(&mut self, x: i32, y: i32, s: &Sprite, flip_x: bool, accent: Color) {
+        let w = s.w();
+        for (row, line) in s.rows.iter().enumerate() {
+            for (col, ch) in line.bytes().enumerate() {
+                let c = if ch == b'x' {
+                    accent
+                } else if let Some(c) = crate::sprites::palette(ch) {
+                    c
+                } else {
+                    continue;
+                };
+                let dx = if flip_x {
+                    w - 1 - col as i32
+                } else {
+                    col as i32
+                };
+                self.pixel(x + dx, y + row as i32, c);
+            }
+        }
+    }
+
+    /// The frame as a 24-bit BMP file, which any computer can open.
+    pub fn to_bmp(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(BMP_SIZE);
+        self.write_bmp(|chunk| out.extend_from_slice(chunk));
+        out
+    }
+
+    /// The same BMP, handed out a piece at a time, so a small device can
+    /// write it to a file without holding the whole picture in memory.
+    pub fn write_bmp(&self, mut out: impl FnMut(&[u8])) {
+        const ROW: usize = (W * 3) as usize; // 720 bytes: a multiple of 4, so no padding
+        let mut header = [0u8; 54];
+        header[..2].copy_from_slice(b"BM");
+        let fields: [(usize, u32); 7] = [
+            (2, BMP_SIZE as u32),
+            (10, 54),
+            (14, 40),
+            (18, W as u32),
+            (22, H as u32),
+            (34, (ROW * H as usize) as u32),
+            (38, 2835),
+        ];
+        for (at, v) in fields {
+            header[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        header[42..46].copy_from_slice(&2835u32.to_le_bytes());
+        header[26] = 1; // planes
+        header[28] = 24; // bits per pixel
+        out(&header);
+        // BMP rows go bottom to top, each pixel blue, green, red.
+        let mut row = [0u8; ROW];
+        for y in (0..H as usize).rev() {
+            for x in 0..W as usize {
+                let p = self.px[y * W as usize + x];
+                let (r, g, b) = (
+                    ((p >> 11) & 0x1F) as u8,
+                    ((p >> 5) & 0x3F) as u8,
+                    (p & 0x1F) as u8,
+                );
+                row[x * 3..x * 3 + 3].copy_from_slice(&[
+                    (b << 3) | (b >> 2),
+                    (g << 2) | (g >> 4),
+                    (r << 3) | (r >> 2),
+                ]);
+            }
+            out(&row);
         }
     }
 

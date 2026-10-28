@@ -4,9 +4,11 @@
 
 use std::{fs, path::Path};
 
+use embedded_graphics::prelude::IntoStorage;
+
 use trail_core::{
     Game, Key,
-    gfx::{Frame, H, W},
+    gfx::{self, Frame, H, W},
 };
 
 fn save(g: &Game, dir: &Path, name: &str) {
@@ -44,6 +46,9 @@ fn main() {
     let mut g = Game::new(3);
     g.tick(1200);
     save(&g, dir, "01_title");
+    let mut f = Frame::new();
+    g.render(&mut f);
+    fs::write(dir.join("01_title.bmp"), f.to_bmp()).expect("write bmp");
     keys(&mut g, &[Key::Char('1'), Key::Char('2'), Key::Char('2')]);
     typed(&mut g, "Sam");
     keys(&mut g, &[Key::Enter, Key::Enter]);
@@ -96,5 +101,61 @@ fn main() {
         g.tick(100);
     }
     save(&g, dir, "11_raft");
+
+    // A second trip for the newer screens: gathering and the save slots.
+    let mut g = Game::new(8);
+    keys(&mut g, &[Key::Char('1'), Key::Char('1'), Key::Char('3')]);
+    typed(&mut g, "Sam");
+    keys(
+        &mut g,
+        &[Key::Enter, Key::Enter, Key::Enter, Key::Enter, Key::Enter],
+    );
+    keys(
+        &mut g,
+        &[Key::Char('y'), Key::Char('2'), Key::Enter, Key::Enter],
+    );
+    for (item, qty) in [('1', "3"), ('2', "600")] {
+        keys(&mut g, &[Key::Char(item)]);
+        typed(&mut g, qty);
+    }
+    keys(&mut g, &[Key::Enter, Key::Enter]);
+    save(&g, dir, "12_sizeup_new");
+    keys(&mut g, &[Key::Char('g')]);
+    save(&g, dir, "13_gather_warning");
+    keys(&mut g, &[Key::Enter, Key::Enter]);
+    // Wander until the forager stands next to a plant (its name label shows up).
+    let label = gfx::rgb(20, 40, 15).into_storage();
+    let mut f = Frame::new();
+    let dirs = [Key::Left, Key::Up, Key::Right, Key::Down];
+    'walk: for leg in 0..40usize {
+        let k = dirs[leg % 4];
+        g.key_down(k);
+        for _ in 0..(3 + leg * 2) {
+            g.tick(60);
+            g.render(&mut f);
+            if f.px.contains(&label) {
+                g.key_up(k);
+                keys(&mut g, &[Key::Char(' ')]);
+                g.tick(200);
+                break 'walk;
+            }
+        }
+        g.key_up(k);
+    }
+    save(&g, dir, "14_gather");
+    keys(&mut g, &[Key::Escape]);
+    save(&g, dir, "15_gather_done");
+    keys(
+        &mut g,
+        &[
+            Key::Enter,
+            Key::Enter,
+            Key::Enter,
+            Key::Char('s'),
+            Key::Char('2'),
+        ],
+    );
+    keys(&mut g, &[Key::Char('s')]);
+    save(&g, dir, "16_slots");
     println!("saved screenshots to {}", dir.display());
 }

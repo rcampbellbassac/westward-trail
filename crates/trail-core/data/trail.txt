@@ -3,7 +3,7 @@
 # ================================================================
 #  Everything about the trail lives here: the landmarks, how far
 #  apart they are, store prices, animals you can hunt, fish,
-#  sicknesses and the names the game suggests.
+#  plants you can gather, sicknesses and the names the game suggests.
 #
 #  HOW TO HACK IT
 #   - Lines starting with # are comments. The game ignores them.
@@ -326,6 +326,295 @@ max_lbs = 0
 # ---------------------------------------------------------------
 # SICKNESSES. "gentle" is used in the gentle (younger pioneers) mode.
 # ---------------------------------------------------------------
+
+# ----------------------------------------------------------------
+#  PLANTS for gathering (press G on the trail).
+#  miles  = where on the trail it grows (Independence is 0)
+#  months = when it's ripe (5-7 means May to July)
+#  color  = red, orange, yellow, white, blue, purple, black, pink, tan
+#  sprite = berry_bush, mushroom, toadstool, flower, leafy
+#  Poisonous plants: poison = yes, looks_like = the good plant,
+#  hint = a clue for younger pioneers, danger = sick or deadly
+#  Missouri & Kansas: 0-300. Nebraska: 300-640. Wyoming: 640-1015.
+#  Idaho: 1015-1500. Oregon: 1500 and up.
+#
+#  REAL LIFE: never eat a wild plant unless a grown-up who really
+#  knows plants says it's safe. Lots of poisonous plants look
+#  like good ones. That's what the poison = yes plants are for.
+# ----------------------------------------------------------------
+
+[plant]
+name = wild strawberries
+color = red
+miles = 0-640
+months = 5-6
+lbs = 1-2
+fact = Wild strawberries are tiny, but pioneers wrote that they tasted sweeter than any garden berry.
+
+[plant]
+name = morel mushrooms
+sprite = mushroom
+color = tan
+miles = 0-350
+months = 4-5
+lbs = 1-2
+rarity = 5
+fact = Morels have a cap like a honeycomb. Real mushroom hunters check every one, because some look-alikes are poisonous.
+
+[plant]
+name = wild onions
+sprite = leafy
+color = pink
+miles = 0-1500
+months = 4-7
+lbs = 1-2
+fact = Wild onions smell like onions. A plant that looks like an onion but doesn't smell like one could be death camas.
+
+[plant]
+name = mulberries
+color = purple
+miles = 0-350
+months = 6-7
+lbs = 1-3
+rarity = 8
+fact = Mulberry trees grew along creeks in Missouri and Kansas. The berries stain your fingers purple.
+
+[plant]
+name = blackberries
+color = black
+miles = 0-300
+months = 7-8
+lbs = 2-4
+fact = Blackberry thorns snag clothes, so pickers wore their oldest shirts.
+
+[plant]
+name = gooseberries
+color = purple
+miles = 0-1500
+months = 6-7
+lbs = 1-2
+rarity = 6
+fact = Gooseberries are sour. Pioneers stewed them with sugar, when they had any sugar left.
+
+[plant]
+name = prairie turnips
+sprite = flower
+color = blue
+miles = 0-800
+months = 5-7
+lbs = 1-3
+rarity = 6
+fact = The Lakota call the prairie turnip timpsila. They braided the roots into long strings to dry them.
+
+[plant]
+name = wild plums
+color = red
+miles = 0-640
+months = 8-9
+lbs = 2-4
+rarity = 8
+fact = Wild plum thickets grew along the Kansas and Platte rivers. Pioneers dried the plums to save them.
+
+[plant]
+name = wild grapes
+color = purple
+miles = 0-640
+months = 8-10
+lbs = 1-3
+rarity = 6
+fact = Wild grapes climb up trees along rivers. They're small and sour, but they make good jelly.
+
+[plant]
+name = chokecherries
+color = black
+miles = 300-1500
+months = 8-9
+lbs = 1-3
+fact = Plains peoples pounded chokecherries into dried buffalo meat and fat to make pemmican, a food that kept for months.
+
+[plant]
+name = buffalo berries
+color = orange
+miles = 300-1000
+months = 9-10
+lbs = 1-2
+rarity = 6
+fact = Buffalo berries taste best after the first frost. They were often served with buffalo meat.
+
+[plant]
+name = serviceberries
+color = blue
+miles = 640-1930
+months = 7-8
+lbs = 2-3
+fact = Serviceberries are also called Saskatoon berries. The Shoshone dried them into cakes for winter.
+
+[plant]
+name = golden currants
+color = yellow
+miles = 640-1500
+months = 7-8
+lbs = 1-2
+rarity = 8
+fact = Golden currants grow along streams in Wyoming. Some bushes have yellow berries, some red, some almost black.
+
+[plant]
+name = sego lily bulbs
+sprite = flower
+color = white
+miles = 640-1300
+months = 5-7
+lbs = 1-2
+rarity = 5
+fact = Settlers in Utah ate sego lily bulbs in hungry years. Today it's Utah's state flower.
+
+[plant]
+name = camas bulbs
+sprite = flower
+color = blue
+miles = 1000-1930
+months = 5-7
+lbs = 2-4
+rarity = 8
+fact = The Nez Perce and Shoshone roasted camas bulbs in pits for a day or more, until they turned sweet.
+
+[plant]
+name = elderberries
+color = blue
+miles = 1000-1930
+months = 8-9
+lbs = 1-3
+rarity = 5
+fact = Blue elderberries have to be cooked before you eat them. People made them into jam and syrup.
+
+[plant]
+name = huckleberries
+color = purple
+miles = 1450-1930
+months = 7-9
+lbs = 1-3
+rarity = 8
+fact = Huckleberries grow in mountain forests. Families still pick them in the Blue Mountains every summer.
+
+[plant]
+name = thimbleberries
+color = red
+miles = 1450-1930
+months = 7-8
+lbs = 1-2
+rarity = 6
+fact = A ripe thimbleberry pops off its stem hollow, like a little red thimble.
+
+[plant]
+name = Oregon grape
+color = blue
+miles = 1500-1930
+months = 8-9
+lbs = 1-2
+rarity = 5
+fact = Oregon grape isn't a grape at all. The berries are very sour, and the roots make a yellow dye.
+
+[plant]
+name = chanterelles
+sprite = mushroom
+color = orange
+miles = 1500-1930
+months = 9-11
+lbs = 1-3
+rarity = 4
+fact = Chanterelles are golden mushrooms that smell a little like apricots.
+
+[plant]
+name = salmonberries
+color = orange
+miles = 1800-1930
+months = 5-7
+lbs = 1-2
+rarity = 6
+fact = Salmonberries ripen early in the summer, around when the salmon start swimming up the rivers.
+
+[plant]
+name = wapato
+sprite = flower
+color = white
+miles = 1750-1930
+months = 9-11
+lbs = 2-3
+rarity = 5
+fact = Wapato grows in the marshes along the Columbia River. Chinook women waded in and loosened the roots with their toes.
+
+# --- poisonous look-alikes ---
+
+[plant]
+name = death camas
+sprite = flower
+color = white
+miles = 640-1930
+months = 5-7
+rarity = 6
+poison = yes
+danger = deadly
+looks_like = camas
+hint = These flowers are creamy white. Weren't camas flowers blue?
+fact = Death camas has creamy white flowers and doesn't smell like an onion. Every part of it is poisonous.
+
+[plant]
+name = moonseed berries
+color = purple
+miles = 0-640
+months = 8-10
+rarity = 4
+poison = yes
+looks_like = wild grapes
+hint = These "grapes" each have just one flat seed inside. Odd...
+fact = Moonseed looks like wild grapes, but each berry has just one seed shaped like a crescent moon. It's poisonous.
+
+[plant]
+name = pokeweed berries
+color = black
+miles = 0-640
+months = 8-10
+rarity = 4
+poison = yes
+looks_like = blackberries
+hint = These berries hang on bright pink stems. Blackberries don't...
+fact = Pokeweed berries hang on bright pink stems. Birds eat them, but they're poisonous to people.
+
+[plant]
+name = baneberries
+color = white
+miles = 640-1930
+months = 7-9
+rarity = 4
+poison = yes
+looks_like = serviceberries
+hint = White berries with a black dot, like little eyes. Hmm...
+fact = White baneberries have a black dot on each one, so people call them doll's eyes. They're poisonous.
+
+[plant]
+name = fly agaric
+sprite = toadstool
+color = red
+miles = 640-1930
+months = 8-10
+rarity = 4
+poison = yes
+looks_like = a good mushroom
+hint = A red cap with white spots, like in a storybook. Careful...
+fact = The fly agaric has a red cap with white spots, like a storybook mushroom. It's poisonous.
+
+[plant]
+name = water hemlock
+sprite = leafy
+color = white
+miles = 0-1930
+months = 5-8
+rarity = 3
+poison = yes
+danger = deadly
+looks_like = wild carrot
+hint = It grows right in the wet mud, with tiny white flowers. Hmm...
+fact = Water hemlock grows in wet places and is one of the most poisonous plants in North America.
 
 [illness]
 name = dysentery

@@ -66,6 +66,41 @@ pub struct Animal {
     pub sprite: String,
 }
 
+/// Something to gather: where on the trail it grows and which months it's ripe.
+#[derive(Clone, Debug)]
+pub struct Plant {
+    pub name: String,
+    /// Picture: berry_bush, mushroom, toadstool, flower or leafy.
+    pub sprite: String,
+    /// Color of the berries, cap or flowers.
+    pub color: (u8, u8, u8),
+    pub miles: (u32, u32),
+    /// Months it can be gathered, 1 = January.
+    pub months: (u32, u32),
+    pub lbs: (u32, u32),
+    pub rarity: u32,
+    pub poison: bool,
+    /// For poisonous plants: the good plant it gets mistaken for.
+    pub looks_like: String,
+    /// For poisonous plants: a subtle clue shown to younger pioneers.
+    pub hint: String,
+    /// For poisonous plants: true if it can kill (rarely, in classic mode).
+    pub deadly: bool,
+    pub fact: String,
+}
+
+impl Plant {
+    pub fn grows(&self, mile: u32, month: u32) -> bool {
+        let (a, b) = self.months;
+        let in_months = if a <= b {
+            (a..=b).contains(&month)
+        } else {
+            month >= a || month <= b
+        };
+        (self.miles.0..=self.miles.1).contains(&mile) && in_months
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Fish {
     pub name: String,
@@ -108,6 +143,7 @@ pub struct TrailData {
     pub landmarks: Vec<Landmark>,
     pub animals: Vec<Animal>,
     pub fish: Vec<Fish>,
+    pub plants: Vec<Plant>,
     pub illnesses: Vec<Illness>,
     pub names: Vec<String>,
 }
@@ -149,6 +185,7 @@ enum Section {
     Landmark,
     Animal,
     Fish,
+    Plant,
     Illness,
     Names,
 }
@@ -203,6 +240,15 @@ impl Block {
             Some((line, v)) => parse_number(line, v),
             None => Ok(default),
         }
+    }
+
+    /// "from-to" like `miles = 0-640`; a single number means just that one.
+    fn range_or(&self, key: &str, default: (u32, u32)) -> Result<(u32, u32), DataError> {
+        let Some((line, v)) = self.get(key) else {
+            return Ok(default);
+        };
+        let (a, b) = v.split_once('-').unwrap_or((v, v));
+        Ok((parse_number(line, a)?, parse_number(line, b)?))
     }
 
     /// Decimal value scaled by 10^places, so "4.5" with 1 place is 45.
@@ -286,6 +332,7 @@ pub fn parse(src: &str) -> Result<TrailData, DataError> {
                 "landmark" => Section::Landmark,
                 "animal" => Section::Animal,
                 "fish" => Section::Fish,
+                "plant" => Section::Plant,
                 "illness" => Section::Illness,
                 "names" => Section::Names,
                 other => return err(line, format!("unknown section [{other}]")),
@@ -325,6 +372,7 @@ pub fn parse(src: &str) -> Result<TrailData, DataError> {
         landmarks: Vec::new(),
         animals: Vec::new(),
         fish: Vec::new(),
+        plants: Vec::new(),
         illnesses: Vec::new(),
         names: Vec::new(),
     };
@@ -431,6 +479,46 @@ pub fn parse(src: &str) -> Result<TrailData, DataError> {
                     max_lbs: b.number_or("max_lbs", min_lbs)?.max(min_lbs),
                 });
             }
+            Section::Plant => {
+                let (cline, color) = b.get("color").unwrap_or((b.line, "purple"));
+                let color = match color.to_ascii_lowercase().as_str() {
+                    "red" => (220, 40, 50),
+                    "orange" => (245, 140, 30),
+                    "yellow" => (250, 215, 60),
+                    "white" => (245, 245, 235),
+                    "blue" => (80, 120, 230),
+                    "purple" => (120, 50, 150),
+                    "black" => (45, 25, 60),
+                    "pink" => (240, 120, 180),
+                    "tan" => (190, 150, 100),
+                    other => {
+                        return err(
+                            cline,
+                            format!(
+                                "unknown color \"{other}\" (try red, orange, yellow, white, blue, purple, black, pink, tan)"
+                            ),
+                        );
+                    }
+                };
+                let lbs = b.range_or("lbs", (1, 2))?;
+                data.plants.push(Plant {
+                    name: b.text("name")?,
+                    sprite: b.text_or("sprite", "berry_bush"),
+                    color,
+                    miles: b.range_or("miles", (0, u32::MAX))?,
+                    months: b.range_or("months", (1, 12))?,
+                    lbs: (lbs.0.max(1), lbs.1.max(lbs.0.max(1))),
+                    rarity: b.number_or("rarity", 10)?,
+                    poison: matches!(
+                        b.text_or("poison", "no").to_ascii_lowercase().as_str(),
+                        "yes" | "true" | "1"
+                    ),
+                    looks_like: b.text_or("looks_like", ""),
+                    hint: b.text_or("hint", "Hmm... something about this plant seems wrong."),
+                    deadly: b.text_or("danger", "sick").eq_ignore_ascii_case("deadly"),
+                    fact: b.text_or("fact", ""),
+                });
+            }
             Section::Illness => {
                 let name = b.text("name")?;
                 let gentle = b.text_or("gentle", &name);
@@ -509,6 +597,8 @@ mod tests {
     fn default_data_parses() {
         let d = parse(DEFAULT_DATA).expect("default data");
         assert_eq!(d.occupations.len(), 3);
+        assert!(d.plants.iter().any(|p| p.poison));
+        assert!(d.plants.iter().any(|p| p.grows(100, 5)));
         assert_eq!(d.prices.food, 20);
         assert_eq!(d.landmarks[1].depth10, 45);
         assert_eq!(d.landmarks.last().unwrap().kind, Kind::End);

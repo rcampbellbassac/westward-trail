@@ -4,7 +4,8 @@
 //! (code from CardputerPDA, tested); the Advanced reads a TCA8418 over I2C
 //! (`--features adv`, mapping taken from M5Stack's M5Cardputer library).
 //!
-//! Fn + ; . , /  are the arrow keys printed on the keycaps, Fn + ` is Escape.
+//! Fn + ; . , /  are the arrow keys printed on the keycaps, Fn + ` is Escape,
+//! Fn + P takes a screenshot.
 //! The game also treats plain ; . , / as arrows in hunting and rafting.
 
 use anyhow::Result;
@@ -13,6 +14,7 @@ use trail_core::Key;
 pub enum Event {
     Down(Key),
     Up(Key),
+    Screenshot,
 }
 
 const NORMAL: [&str; 4] = [
@@ -61,7 +63,8 @@ fn decode(pos: (usize, usize), shift: bool, fn_held: bool) -> Option<Key> {
 /// Turns "which positions are held right now" into key down/up events.
 #[derive(Default)]
 struct Tracker {
-    held: Vec<((usize, usize), Key)>,
+    /// Keys held down; `None` for a key used up by a shortcut like Fn+P.
+    held: Vec<((usize, usize), Option<Key>)>,
 }
 
 impl Tracker {
@@ -70,7 +73,9 @@ impl Tracker {
         self.held.retain(|(pos, key)| {
             let still = now.contains(pos);
             if !still {
-                events.push(Event::Up(*key));
+                if let Some(key) = key {
+                    events.push(Event::Up(*key));
+                }
             }
             still
         });
@@ -80,8 +85,11 @@ impl Tracker {
             if is_modifier(pos) || self.held.iter().any(|(p, _)| *p == pos) {
                 continue;
             }
-            if let Some(key) = decode(pos, shift, fn_held) {
-                self.held.push((pos, key));
+            if fn_held && NORMAL[pos.1].chars().nth(pos.0) == Some('p') {
+                self.held.push((pos, None));
+                events.push(Event::Screenshot);
+            } else if let Some(key) = decode(pos, shift, fn_held) {
+                self.held.push((pos, Some(key)));
                 events.push(Event::Down(key));
             }
         }

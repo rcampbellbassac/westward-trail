@@ -5,6 +5,9 @@
 //!   2. call [`Game::tick`] with the milliseconds since last time
 //!   3. call [`Game::render`] and show the 240x135 [`gfx::Frame`]
 //!   4. play anything returned by [`Game::take_beeps`]
+//!
+//! Saved trips and the Top Ten come and go as text: hand saved slots in with
+//! [`Game::import_slot`] and write whatever [`Game::take_saves`] returns.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -16,10 +19,12 @@ pub mod rng;
 pub mod sprites;
 
 mod fish;
+mod forage;
 mod hunt;
 mod pictures;
 mod raft;
 mod river;
+mod save;
 mod score;
 mod setup;
 mod store;
@@ -32,6 +37,7 @@ use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
 use data::TrailData;
 use gfx::{Frame, Theme};
 use rng::Rng;
+pub use save::{SLOTS, SaveOp, sequence as save_sequence};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Key {
@@ -203,10 +209,12 @@ pub(crate) enum Scene {
     Dalles,
     Hunt(Box<hunt::HuntState>),
     Fish(Box<fish::FishState>),
+    Forage(Box<forage::ForageState>),
     Raft(Box<raft::RaftState>),
     Score(Vec<(String, u32)>),
     GameOver,
     Terminal(Box<terminal::TermState>),
+    Slots(save::SlotState),
 }
 
 pub struct Game {
@@ -221,6 +229,16 @@ pub struct Game {
     pub(crate) top: Vec<ScoreEntry>,
     /// Milliseconds since the game started, for blinking things.
     pub(crate) clock: u32,
+    /// Saved trips, as text.
+    pub(crate) slots: [Option<String>; SLOTS],
+    /// Things for the platform to write down.
+    pub(crate) saves: Vec<SaveOp>,
+    /// A short note shown over the screen ("Saved in slot 2").
+    pub(crate) toast: Option<(String, u32)>,
+    /// Saves made so far (the biggest "saved = N" seen), so newer saves count higher.
+    pub(crate) save_count: u32,
+    /// Younger pioneers get the real-life plant safety talk once.
+    pub(crate) forage_warned: bool,
 }
 
 impl Game {
@@ -254,6 +272,11 @@ impl Game {
             },
             top: score::default_top_ten(),
             clock: 0,
+            slots: Default::default(),
+            saves: Vec::new(),
+            toast: None,
+            save_count: 0,
+            forage_warned: false,
         }
     }
 
@@ -285,6 +308,12 @@ impl Game {
     pub fn tick(&mut self, ms: u32) {
         let ms = ms.min(250);
         self.clock = self.clock.wrapping_add(ms);
+        if let Some((_, t)) = &mut self.toast {
+            *t = t.saturating_sub(ms);
+            if *t == 0 {
+                self.toast = None;
+            }
+        }
         if !self.msgs.is_empty() {
             return;
         }
@@ -298,6 +327,13 @@ impl Game {
             (_, Scene::Terminal(t)) => terminal::render(self, f, t),
             (Some(m), _) => ui::render_msg(self, f, m),
             (None, scene) => self.render_scene(f, scene),
+        }
+        if let Some((text, _)) = &self.toast {
+            let w = text.len() as i32 * 6 + 8;
+            let x = (gfx::W - w) / 2;
+            f.rect(x, 2, w, 13, gfx::rgb(20, 60, 25));
+            f.outline(x, 2, w, 13, gfx::GREEN);
+            f.text(x + 4, 4, text, gfx::WHITE, gfx::Font::Normal);
         }
         f.apply_theme(self.cheats.theme);
     }
@@ -318,10 +354,33 @@ impl Game {
         }
     }
 
+    /// Hand in a saved trip (slot 0-4) that the platform kept. Empty text clears the slot.
+    pub fn import_slot(&mut self, slot: usize, text: &str) {
+        if slot < SLOTS {
+            self.save_count = self.save_count.max(save::sequence(text));
+            self.slots[slot] = (!text.trim().is_empty()).then(|| String::from(text));
+        }
+    }
+
+    /// Saved trips and scores the platform should write down now.
+    pub fn take_saves(&mut self) -> Vec<SaveOp> {
+        save::take(self)
+    }
+
+    /// Show a short note over the screen for a couple of seconds.
+    pub fn notify(&mut self, text: impl Into<String>) {
+        let mut text: String = text.into();
+        text.truncate(38);
+        self.toast = Some((text, 2500));
+    }
+
     // ---- internals ----
 
     fn in_action_game(&self) -> bool {
-        matches!(self.scene, Scene::Hunt(_) | Scene::Fish(_) | Scene::Raft(_))
+        matches!(
+            self.scene,
+            Scene::Hunt(_) | Scene::Fish(_) | Scene::Raft(_) | Scene::Forage(_)
+        )
     }
 
     fn set_held(&mut self, k: Key, down: bool) {
@@ -400,10 +459,12 @@ impl Game {
             Scene::Dalles => river::dalles_key(self, k),
             Scene::Hunt(h) => hunt::key(self, h, k),
             Scene::Fish(s) => fish::key(self, s, k),
+            Scene::Forage(s) => forage::key(self, s, k),
             Scene::Raft(r) => Scene::Raft(r),
             Scene::Score(_) => score::after_score(self),
             Scene::GameOver => Scene::Title,
             Scene::Terminal(t) => terminal::key(self, t, k),
+            Scene::Slots(s) => save::key(self, s, k),
         }
     }
 
@@ -413,6 +474,7 @@ impl Game {
             Scene::River(r) => river::tick(self, r, ms),
             Scene::Hunt(h) => hunt::tick(self, h, ms),
             Scene::Fish(s) => fish::tick(self, s, ms),
+            Scene::Forage(s) => forage::tick(self, s, ms),
             Scene::Raft(r) => raft::tick(self, r, ms),
             other => other,
         }
@@ -441,10 +503,12 @@ impl Game {
             Scene::Dalles => river::render_dalles(self, f),
             Scene::Hunt(h) => hunt::render(self, f, h),
             Scene::Fish(s) => fish::render(self, f, s),
+            Scene::Forage(s) => forage::render(self, f, s),
             Scene::Raft(r) => raft::render(self, f, r),
             Scene::Score(lines) => score::render_score(self, f, lines),
             Scene::GameOver => score::render_game_over(self, f),
             Scene::Terminal(_) => {}
+            Scene::Slots(s) => save::render(self, f, s),
         }
     }
 }
@@ -560,6 +624,9 @@ mod tests {
             Key::Char('n'),
             Key::Char('h'),
             Key::Char('f'),
+            Key::Char('g'),
+            Key::Char('s'),
+            Key::Char('4'),
             Key::Char('9'),
         ];
         let mut f = Frame::new();
@@ -582,6 +649,161 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Play into the trail, as the robot does, and stop at the first size-up screen.
+    fn start_trip(seed: u64) -> Game {
+        let mut g = Game::new(seed);
+        for k in [Key::Char('1'), Key::Char('2'), Key::Char('3')] {
+            g.key_down(k);
+        }
+        for _ in 0..5 {
+            g.key_down(Key::Enter);
+        }
+        g.key_down(Key::Char('y'));
+        g.key_down(Key::Char('2'));
+        while !g.msgs.is_empty() {
+            g.key_down(Key::Enter);
+        }
+        for (item, qty) in [('1', "3"), ('2', "500"), ('4', "2")] {
+            g.key_down(Key::Char(item));
+            for c in qty.chars() {
+                g.key_down(Key::Char(c));
+            }
+            g.key_down(Key::Enter);
+            while !g.msgs.is_empty() {
+                g.key_down(Key::Enter);
+            }
+        }
+        g.key_down(Key::Enter);
+        while !g.msgs.is_empty() {
+            g.key_down(Key::Enter);
+        }
+        assert!(matches!(g.scene, Scene::SizeUp));
+        g
+    }
+
+    #[test]
+    fn save_and_load_round_trip() {
+        let mut g = start_trip(11);
+        g.t.miles = 123;
+        g.t.sup.food = 777;
+        g.t.party[1].sick = Some((String::from("a fever"), 2));
+        g.t.party[2].gone = true;
+        g.key_down(Key::Char('s'));
+        g.key_down(Key::Char('3'));
+        let ops = g.take_saves();
+        let SaveOp::Slot(2, text) = &ops[0] else {
+            panic!("expected slot 3 to be saved: {ops:?}");
+        };
+        assert!(save::summary(text).unwrap().contains("Independence"));
+
+        // A fresh game, as after a reboot: the platform hands the slot back.
+        let mut h = Game::new(99);
+        h.import_slot(2, text);
+        h.key_down(Key::Char('4'));
+        h.key_down(Key::Char('3'));
+        assert!(
+            matches!(h.scene, Scene::SizeUp),
+            "loading should land on the size-up screen"
+        );
+        assert_eq!(h.t.miles, 123);
+        assert_eq!(h.t.sup.food, 777);
+        assert_eq!(h.t.party.len(), g.t.party.len());
+        assert_eq!(h.t.party[1].sick, Some((String::from("a fever"), 2)));
+        assert!(h.t.party[2].gone);
+        assert_eq!(h.rng.state(), g.rng.state());
+        assert_eq!(save::to_text(&h), save::to_text(&g));
+
+        // Saving over a used slot asks first.
+        g.key_down(Key::Char('s'));
+        g.key_down(Key::Char('3'));
+        assert!(matches!(g.scene, Scene::Slots(_)));
+        g.key_down(Key::Char('n'));
+        g.key_down(Key::Escape);
+        assert!(matches!(g.scene, Scene::SizeUp));
+        assert!(g.take_saves().is_empty());
+
+        // Each save counts higher, so devices without a clock can tell which copy is newest.
+        let first = save::sequence(text);
+        g.key_down(Key::Char('s'));
+        g.key_down(Key::Char('4'));
+        let SaveOp::Slot(3, newer) = &g.take_saves()[0] else {
+            panic!("expected slot 4");
+        };
+        assert!(save::sequence(newer) > first);
+        // A game that starts from old saves keeps counting from the highest one.
+        let mut h = Game::new(1);
+        h.import_slot(0, newer);
+        assert_eq!(h.save_count, save::sequence(newer));
+    }
+
+    #[test]
+    fn bad_saves_are_refused_kindly() {
+        let g = Game::new(1);
+        assert!(save::from_text(&g, "garbage").is_err());
+        assert!(
+            save::from_text(&g, "trail = Some Other Trail|3|50\nperson = A|here||0\n").is_err()
+        );
+        let mut h = Game::new(1);
+        h.import_slot(0, "food = lots");
+        h.key_down(Key::Char('4'));
+        h.key_down(Key::Char('1'));
+        assert!(!h.msgs.is_empty(), "a broken save should explain itself");
+        assert!(matches!(h.scene, Scene::Slots(_)));
+    }
+
+    #[test]
+    fn screenshots_are_bmp_files() {
+        let mut f = Frame::new();
+        Game::new(3).render(&mut f);
+        let bmp = f.to_bmp();
+        assert_eq!(&bmp[..2], b"BM");
+        assert_eq!(bmp.len(), 54 + 240 * 3 * 135);
+    }
+
+    #[test]
+    fn gathering_finds_food_in_season() {
+        let mut found = false;
+        for seed in 0..10 {
+            let mut g = start_trip(seed);
+            g.t.day = 160; // early June, near Independence: strawberries, onions...
+            g.key_down(Key::Char('g'));
+            while !g.msgs.is_empty() {
+                g.key_down(Key::Enter);
+            }
+            assert!(matches!(g.scene, Scene::Forage(_)));
+            let food = g.t.sup.food;
+            let mut f = Frame::new();
+            // Wander in a square, picking as we go.
+            for step in 0..400u32 {
+                let k = [Key::Right, Key::Down, Key::Left, Key::Up][(step / 25 % 4) as usize];
+                g.key_down(k);
+                g.tick(60);
+                g.key_up(k);
+                g.key_down(Key::Char(' '));
+                if step % 40 == 0 {
+                    g.render(&mut f);
+                }
+                if !matches!(g.scene, Scene::Forage(_)) {
+                    break;
+                }
+            }
+            if matches!(g.scene, Scene::Forage(_)) {
+                g.key_down(Key::Escape);
+            }
+            found |= g.t.sup.food > food;
+        }
+        assert!(found, "ten trips of gathering in June found nothing");
+    }
+
+    #[test]
+    fn nothing_grows_in_winter() {
+        let mut g = start_trip(4);
+        g.t.day = 15; // January
+        g.key_down(Key::Char('g'));
+        assert!(matches!(g.scene, Scene::SizeUp));
+        assert!(!g.msgs.is_empty());
     }
 
     #[test]
@@ -609,6 +831,7 @@ mod tests {
             "cat secrets",
             "whoami",
             "matrix",
+            "forage",
             "sudo give oxen 3",
             "nonsense",
             "clear",

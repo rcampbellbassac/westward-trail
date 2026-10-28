@@ -405,6 +405,7 @@
     <div class="bar">
       <button id="sound">Sound: on</button>
       <button id="restart">Restart</button>
+      <button id="shot">Screenshot</button>
       <button id="modbtn">Mod editor</button>
       <a class="btn" href="play/">Full screen</a>
     </div>
@@ -447,7 +448,8 @@
       <h2>2,000 miles of trouble</h2>
       <p class="lede">
         It's 1848. You buy oxen and flour in Independence, Missouri, and point your wagon at Oregon's Willamette Valley.
-        Seventeen real landmarks, from the Kansas River to The Dalles, with every mini-game you remember.
+        Seventeen real landmarks, from the Kansas River to The Dalles, every mini-game you remember, and a new one:
+        gathering wild food that changes with the place and the season.
       </p>
       <div class="shots">
         <figure class="shot"><img src="shots/travel.png" alt="Wagon and oxen traveling across rainy plains, with date, weather, health and food" loading="lazy" width="480" height="270">
@@ -462,6 +464,10 @@
           <figcaption><b>Go fishing</b>Cast, wait, and strike fast when it bites. Watch out for old boots.</figcaption></figure>
         <figure class="shot"><img src="shots/map.png" alt="Map of the trail from Independence to Oregon with landmark dots" loading="lazy" width="480" height="270">
           <figcaption><b>Follow the map</b>Forts, rivers, Chimney Rock, South Pass. Talk to the people you meet.</figcaption></figure>
+        <figure class="shot"><img src="shots/gather.png" alt="Gathering mini-game: the forager stands next to wild onions, labeled, with mushrooms and other plants around" loading="lazy" width="480" height="270">
+          <figcaption><b>Gather wild food</b>Twenty-eight real plants, each growing where and when it really did along the trail. Watch out for the poisonous look-alikes.</figcaption></figure>
+        <figure class="shot"><img src="shots/slots.png" alt="Save screen with five slots, one holding a saved trip" loading="lazy" width="480" height="270">
+          <figcaption><b>Save your trip</b>Five save slots, kept in your browser or on the Cardputer (and its SD card).</figcaption></figure>
       </div>
     </div>
   </section>
@@ -551,7 +557,7 @@ mile = 400</pre>
         <li>Install Rust for the ESP32: <code>cargo install espup espflash ldproxy</code>, then <code>espup install</code>.</li>
         <li>Plug in the Cardputer. If your computer doesn't see it, hold <b>G0</b> while you plug it in.</li>
         <li>In <code>firmware/</code>, run <code>cargo run --release</code>. For the Cardputer ADV, add <code>--features adv</code>.</li>
-        <li>On the device, <kbd>Fn</kbd> + <kbd>;</kbd> <kbd>.</kbd> <kbd>,</kbd> <kbd>/</kbd> are the arrow keys.</li>
+        <li>On the device, <kbd>Fn</kbd> + <kbd>;</kbd> <kbd>.</kbd> <kbd>,</kbd> <kbd>/</kbd> are the arrow keys, and <kbd>Fn</kbd> + <kbd>P</kbd> saves a screenshot to the SD card.</li>
       </ol>
     </div>
   </section>

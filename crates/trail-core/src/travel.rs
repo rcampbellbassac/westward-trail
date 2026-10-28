@@ -773,6 +773,8 @@ pub fn render_sizeup(g: &Game, f: &mut Frame) {
     if can_fish(g) {
         items.push(String::from("F. Go fishing"));
     }
+    items.push(String::from("G. Gather food"));
+    items.push(String::from("S. Save trip"));
     let per_col = items.len().div_ceil(2);
     for (i, s) in items.iter().enumerate() {
         let x = if i < per_col { 2 } else { 126 };
@@ -809,6 +811,8 @@ pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
         Key::Char('f' | 'F') if can_fish(g) => {
             return Scene::Fish(alloc::boxed::Box::default());
         }
+        Key::Char('g' | 'G') => return crate::forage::start(g),
+        Key::Char('s' | 'S') => return crate::save::open(crate::save::SlotMode::Save),
         _ => {}
     }
     let acts = actions(g);

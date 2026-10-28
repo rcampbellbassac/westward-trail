@@ -4,6 +4,7 @@
 //!   r  red              o orange    y yellow     g green     G dark green
 //!   u  blue             U dark blue b brown      B dark brown
 //!   t  tan              s skin      p purple
+//!   x  the plant's own color (from `color = ...` in the trail file)
 //!
 //! Change a letter, rebuild, and the picture in the game changes.
 //! Animals face RIGHT; the game mirrors them when they run left.
@@ -253,6 +254,65 @@ pub const BOOT: Sprite = Sprite {
         "..bbb..", "..bbb..", "..bbb..", "..bbb..", "bbbbbb.", "BBBBBBB",
     ],
 };
+
+/// The forager, carrying a basket.
+pub const GATHERER: Sprite = Sprite {
+    rows: &[
+        "..ttt...", ".ttttt..", "..sss...", "..sks...", ".ppppp..", "ppppppp.", "s.ppp.s.",
+        "..ppp.bb", "..uuu.bb", "..u.u...", "..u.u...", ".kk.kk..",
+    ],
+};
+
+/// A berry bush; `x` is the berries.
+pub const BERRY_BUSH: Sprite = Sprite {
+    rows: &[
+        "...GgG.....",
+        ".GgxgGgG...",
+        "GgGgGxgGG..",
+        "gxGgGgGxgG.",
+        "GgGxgGgGgG.",
+        ".GgGgGxGg..",
+        "..GgGgGG...",
+        "....bb.....",
+    ],
+};
+
+/// A mushroom; `x` is the cap.
+pub const MUSHROOM: Sprite = Sprite {
+    rows: &[
+        "..xxxx..", ".xxxxxx.", "xxxxxxxx", "...ww...", "...ww...", "..wwww..",
+    ],
+};
+
+/// A storybook mushroom with white spots; `x` is the cap.
+pub const TOADSTOOL: Sprite = Sprite {
+    rows: &[
+        "..xwxx..", ".xxxxwx.", "xwxxxxxx", "...ww...", "...ww...", "..wwww..",
+    ],
+};
+
+/// A plant with a flower spike (bulbs and roots underneath); `x` is the flowers.
+pub const FLOWER: Sprite = Sprite {
+    rows: &[
+        "...x...", "..xxx..", "...x...", "..xgx..", "...g...", ".g.g.g.", "..ggg..", "...g...",
+    ],
+};
+
+/// Leafy greens; `x` is the little flowers.
+pub const LEAFY: Sprite = Sprite {
+    rows: &["..x...x.", ".gGg.gGg", "gGgGgGg.", ".gGgGgG.", "..gGgg.."],
+};
+
+/// The sprite named in the trail file for a plant.
+pub fn plant(name: &str) -> &'static Sprite {
+    match name {
+        "mushroom" => &MUSHROOM,
+        "toadstool" => &TOADSTOOL,
+        "flower" => &FLOWER,
+        "leafy" => &LEAFY,
+        _ => &BERRY_BUSH,
+    }
+}
 
 pub fn animal(name: &str) -> &'static Sprite {
     match name {

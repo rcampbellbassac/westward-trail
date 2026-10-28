@@ -2,6 +2,8 @@
 
 const MOD_KEY = "trail.mod";
 const SCORES_KEY = "trail.scores";
+const SLOT_KEY = (i) => "trail.slot" + (i + 1);
+const SLOTS = 5;
 
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -148,8 +150,55 @@ function frame(now) {
     fpsTime = now;
     store.set(SCORES_KEY, (wasm.trail_export_scores(), readText()));
   }
+  // Saved trips go to browser storage as soon as the game makes them.
+  for (let kind = wasm.trail_next_save(); kind >= 0; kind = wasm.trail_next_save()) {
+    if (kind === 100) store.set(SCORES_KEY, readText());
+    else if (kind < SLOTS) store.set(SLOT_KEY(kind), readText());
+  }
   requestAnimationFrame(frame);
 }
+
+// ---- saved trips & screenshots ----
+function loadSlots() {
+  for (let i = 0; i < SLOTS; i++) {
+    const text = store.get(SLOT_KEY(i));
+    if (text) {
+      writeText(text);
+      wasm.trail_import_slot(i);
+    }
+  }
+}
+
+function notify(text) {
+  writeText(text);
+  wasm.trail_notify();
+}
+
+// A crisp PNG of the screen, 4x bigger so the pixels stay sharp.
+function screenshot() {
+  const scale = 4;
+  const big = document.createElement("canvas");
+  big.width = canvas.width * scale;
+  big.height = canvas.height * scale;
+  const g = big.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  g.drawImage(canvas, 0, 0, big.width, big.height);
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const name = `westward-trail-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.png`;
+  big.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    notify("Screenshot saved!");
+  }, "image/png");
+}
+
+const shotBtn = document.getElementById("shot");
+if (shotBtn) shotBtn.onclick = () => { screenshot(); focusGame(); };
 
 // ---- mod editor ----
 function setStatus(text, ok) {
@@ -161,6 +210,7 @@ function applyMod(text, quiet) {
   writeText(text);
   const ok = wasm.trail_load_mod() === 1;
   if (!quiet || !ok) setStatus(readText(), ok);
+  if (ok) loadSlots(); // a new trail starts a new game; give it the saved trips again
   return ok;
 }
 
@@ -187,6 +237,7 @@ document.getElementById("reset").onclick = () => {
   modText.value = builtInData();
   store.del(MOD_KEY);
   wasm.trail_init(Date.now() >>> 0);
+  loadSlots();
   setStatus("Back to the original trail.", true);
 };
 
@@ -194,6 +245,7 @@ document.getElementById("restart").onclick = () => {
   const mod = store.get(MOD_KEY);
   wasm.trail_init(Date.now() >>> 0);
   if (mod) applyMod(mod, true);
+  else loadSlots();
   focusGame();
 };
 
@@ -219,6 +271,7 @@ showSound();
     writeText(scores);
     wasm.trail_import_scores();
   }
+  loadSlots();
   const mod = store.get(MOD_KEY);
   if (mod && !applyMod(mod, true)) {
     modPanel.classList.add("open");

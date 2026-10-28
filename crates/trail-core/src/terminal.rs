@@ -15,7 +15,7 @@ const HELP: &[&str] = &[
     "speed 1-10    warp MILES    win",
     "weather clear|rain|snow|hot|cold",
     "theme color|green|amber",
-    "hunt    fish    raft",
+    "hunt    fish    raft    forage",
     "ls  cat FILE  whoami  matrix  clear",
     "exit (or ESC)",
 ];
@@ -277,6 +277,10 @@ fn run(g: &mut Game, t: &mut TermState, cmd: &str) -> Option<Scene> {
             return Some(Scene::Hunt(Box::new(hunt::HuntState::new(g))));
         }
         "fish" => return Some(Scene::Fish(Box::default())),
+        "forage" | "gather" => {
+            g.cheats.used = true;
+            return Some(crate::forage::start(g));
+        }
         "raft" => {
             if g.t.party.is_empty() {
                 out(t, "Start a trip first!");

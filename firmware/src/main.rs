@@ -1,10 +1,12 @@
 //! Westward Trail on the M5Stack Cardputer.
 //!
 //! All of the game lives in `trail-core`. This file only connects it to the
-//! hardware: keyboard in, 240x135 pixels out to the ST7789, beeps to the speaker.
+//! hardware: keyboard in, 240x135 pixels out to the ST7789, beeps to the speaker,
+//! saves to flash and the SD card.
 //! Display, keyboard and speaker setup follow the tested CardputerPDA firmware.
 
 mod keyboard;
+mod storage;
 
 use anyhow::Result;
 use esp_idf_hal::{
@@ -111,6 +113,22 @@ fn run() -> Result<()> {
                 }
             })?;
     }
+    // Saves and screenshots: internal flash, plus the SD card (SCK 40, MOSI 14, MISO 39, CS 12).
+    let (event_tx, storage_events) = mpsc::channel::<storage::Event>();
+    let (save_tx, save_rx) = mpsc::channel::<trail_core::SaveOp>();
+    let sd = storage::SdPins {
+        spi: p.spi3,
+        sck: p.pins.gpio40,
+        mosi: p.pins.gpio14,
+        miso: p.pins.gpio39,
+        cs: p.pins.gpio12,
+    };
+    std::thread::Builder::new()
+        .name("trail-storage".into())
+        .stack_size(16 * 1024)
+        .spawn(move || storage::run(sd, event_tx, save_rx))?;
+    let mut next_shot: Option<u32> = None;
+
     let seed = unsafe { esp_idf_svc::sys::esp_random() };
     let mut game = Game::new(u64::from(seed));
     let mut frame = Frame::new();
@@ -118,10 +136,32 @@ fn run() -> Result<()> {
 
     loop {
         let start = Instant::now();
+        while let Ok(event) = storage_events.try_recv() {
+            match event {
+                storage::Event::Slot(i, text) => game.import_slot(i, &text),
+                storage::Event::Scores(text) => game.import_scores(&text),
+                storage::Event::SdReady(n) => next_shot = Some(n),
+                storage::Event::Note(text) => game.notify(text),
+            }
+        }
         for event in keys.poll()? {
             match event {
                 keyboard::Event::Down(k) => game.key_down(k),
                 keyboard::Event::Up(k) => game.key_up(k),
+                keyboard::Event::Screenshot => match next_shot {
+                    // The frame still holds what's on screen right now.
+                    Some(n) => match storage::screenshot(&frame, n) {
+                        Ok(name) => {
+                            next_shot = Some(n + 1);
+                            game.notify(format!("Saved {name}"));
+                        }
+                        Err(e) => {
+                            log::warn!("screenshot failed: {e:#}");
+                            game.notify("Screenshot failed");
+                        }
+                    },
+                    None => game.notify("Put in an SD card for screenshots"),
+                },
             }
         }
         let now = Instant::now();
@@ -129,6 +169,9 @@ fn run() -> Result<()> {
         last = now;
         for b in game.take_beeps() {
             let _ = beep_tx.send(b);
+        }
+        for op in game.take_saves() {
+            let _ = save_tx.send(op);
         }
         game.render(&mut frame);
         let pixels = frame.px.iter().map(|&raw| color_from_raw(raw));

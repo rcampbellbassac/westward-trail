@@ -6,7 +6,7 @@
 use std::cell::RefCell;
 
 use trail_core::{
-    Game, Key,
+    Game, Key, SaveOp,
     data::DEFAULT_DATA,
     gfx::{Frame, H, W},
 };
@@ -18,6 +18,7 @@ struct App {
     text_in: Vec<u8>,
     text_out: String,
     beeps: Vec<u32>,
+    saves: Vec<SaveOp>,
     seed: u64,
 }
 
@@ -35,6 +36,7 @@ fn with<R>(f: impl FnOnce(&mut App) -> R) -> R {
             text_in: Vec::new(),
             text_out: String::new(),
             beeps: Vec::new(),
+            saves: Vec::new(),
             seed: 1,
         });
         f(app)
@@ -184,5 +186,45 @@ pub extern "C" fn trail_import_scores() {
     with(|a| {
         let s = String::from_utf8_lossy(&a.text_in).into_owned();
         a.game.import_scores(&s);
+    });
+}
+
+/// Hand in a saved trip from browser storage (text in the text-in buffer).
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_import_slot(slot: u32) {
+    with(|a| {
+        let s = String::from_utf8_lossy(&a.text_in).into_owned();
+        a.game.import_slot(slot as usize, &s);
+    });
+}
+
+/// The next thing to write to browser storage: returns the slot 0-4, or 100 for
+/// the Top Ten, with the text in text-out. Returns -1 when there's nothing left.
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_next_save() -> i32 {
+    with(|a| {
+        a.saves.extend(a.game.take_saves());
+        if a.saves.is_empty() {
+            return -1;
+        }
+        match a.saves.remove(0) {
+            SaveOp::Slot(slot, text) => {
+                a.text_out = text;
+                slot as i32
+            }
+            SaveOp::Scores(text) => {
+                a.text_out = text;
+                100
+            }
+        }
+    })
+}
+
+/// Show the text-in buffer as a short note over the game.
+#[unsafe(no_mangle)]
+pub extern "C" fn trail_notify() {
+    with(|a| {
+        let s = String::from_utf8_lossy(&a.text_in).into_owned();
+        a.game.notify(s);
     });
 }
