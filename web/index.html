@@ -104,6 +104,7 @@
   .pad .row { display: flex; gap: 4px; width: 100%; max-width: 560px; }
   .pad button { flex: 1 1 0; min-width: 0; height: 44px; padding: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
   .pad button:active { background: var(--accent); color: #000; }
+  .pad button[style]:active { filter: brightness(0.7); }
   .pad .wide { flex-grow: 1.8; }
   .pad .space { flex-grow: 4; }
   .pad .on { background: var(--accent); color: #000; }
@@ -119,7 +120,8 @@
   dialog.ask form { display: flex; gap: 10px; justify-content: center; }
   dialog.ask button { min-height: 44px; padding: 0 14px; white-space: nowrap; }
   dialog.ask { background: var(--panel, #222); color: inherit; border: 2px solid var(--accent); }
-  @media (pointer: coarse) { .pad { display: flex; } }
+  .pad.show { display: flex; }
+  @media (pointer: coarse) { .pad { display: flex; }  #keysbtn { display: none; } }
 </style>
 </head>
 <body>
@@ -135,6 +137,7 @@
     <button id="restart">Restart</button>
     <button id="shot">Screenshot</button>
     <button id="modbtn">Mod editor</button>
+    <button id="keysbtn">Show keys</button>
   </div>
   <p class="hint">
     Numbers pick menu choices, <kbd>Enter</kbd> continues. Hunting &amp; rafting: arrows or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>,

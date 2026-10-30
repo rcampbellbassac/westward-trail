@@ -128,6 +128,15 @@ const PAD = [
 const PAD_LEFT = [[["ESC", "Escape"], ["MENU", "`"]], [["SPACE", " "]]];
 const PAD_ARROWS = [null, ["\u25b2", "ArrowUp", "arrow"], null,
   ["\u25c0", "ArrowLeft", "arrow"], ["\u25bc", "ArrowDown", "arrow"], ["\u25b6", "ArrowRight", "arrow"]];
+// Key colors match the game's (KEY_COLORS in gfx.rs): each number its own color,
+// ENTER and Y green for go, ESC and N red for stop, SPACE white.
+const KEY_COLORS = ["#5aa0ff", "#fadc46", "#ff78be", "#b982ff", "#3cd2c8", "#fa9632", "#c88c50", "#ebebeb", "#a0a0a0"];
+const GO = "#50d25a", STOP = "#f05046", SPACE = "#ebebeb";
+const keyColor = (k) =>
+  /^[1-9]$/.test(k) ? KEY_COLORS[k - 1]
+    : k === "Enter" || k === "y" ? GO
+    : k === "Escape" || k === "n" ? STOP
+    : k === " " ? SPACE : null;
 const padEl = document.getElementById("pad");
 let shift = false;
 const letters = [];
@@ -146,6 +155,12 @@ function padKey(parent, [label, k, cls]) {
   btn.textContent = label;
   btn.dataset.key = k;
   if (cls) btn.className = cls;
+  const color = keyColor(k);
+  if (color) {
+    btn.style.background = color;
+    btn.style.color = "#000";
+    btn.style.borderColor = color;
+  }
   if (k === "`") btn.title = "Your menu when playing together";
   if (/^[a-z]$/.test(k)) letters.push(btn);
   let code = null;
@@ -171,6 +186,15 @@ for (const keys of PAD) {
   const row = div(padEl, "row");
   for (const key of keys) padKey(row, key);
 }
+// Touch screens always show the keys; with a mouse they're a button away.
+const keysBtn = document.getElementById("keysbtn");
+function showKeys(on) {
+  padEl.classList.toggle("show", on);
+  keysBtn.textContent = on ? "Hide keys" : "Show keys";
+  store.set("trail.keys", on ? "on" : "off");
+}
+keysBtn.onclick = () => { showKeys(!padEl.classList.contains("show")); focusGame(); };
+showKeys(store.get("trail.keys") === "on");
 const bottom = div(padEl, "row bottom");
 const left = div(bottom, "left");
 for (const keys of PAD_LEFT) {

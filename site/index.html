@@ -192,6 +192,7 @@
     -webkit-user-select: none;
   }
   .pad button:active { background: var(--gold); color: #2a1a05; }
+  .pad button[style]:active { filter: brightness(0.7); }
   .pad .wide { flex-grow: 1.8; font-size: 8px; }
   .pad .arrow { font-family: system-ui, sans-serif; font-size: 16px; }
   .pad .space { flex-grow: 4; }
@@ -210,7 +211,8 @@
   dialog.ask { background: #1a1730; color: var(--ink); border: 2px solid var(--gold); font-family: var(--pixel); font-size: 11px; line-height: 1.6; }
   dialog.ask button { font-family: var(--pixel); font-size: 10px; background: #fff1; color: var(--ink); border: 2px solid #fff3; border-radius: 8px; }
   dialog.ask button[value=yes] { background: var(--gold); color: #2a1a05; }
-  @media (pointer: coarse) { .pad { display: flex; } }
+  .pad.show { display: flex; }
+  @media (pointer: coarse) { .pad { display: flex; }  #keysbtn { display: none; } }
 
   #mod {
     display: none;
@@ -410,6 +412,7 @@
       <button id="restart">Restart</button>
       <button id="shot">Screenshot</button>
       <button id="modbtn">Mod editor</button>
+      <button id="keysbtn">Show keys</button>
       <a class="btn" href="play/">Full screen</a>
     </div>
     <p class="hint">

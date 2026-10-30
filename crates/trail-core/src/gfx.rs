@@ -48,6 +48,65 @@ pub const TAN: Color = rgb(220, 190, 130);
 pub const SKIN: Color = rgb(240, 190, 150);
 pub const PURPLE: Color = rgb(170, 90, 200);
 
+/// Each number key has its own color, so children who can't read yet can match a menu line to
+/// its key ("press the blue one"). The web keyboard uses the same colors (web/main.js).
+pub const KEY_COLORS: [Color; 9] = [
+    rgb(90, 160, 255),  // 1 blue
+    rgb(250, 220, 70),  // 2 yellow
+    rgb(255, 120, 190), // 3 pink
+    rgb(185, 130, 255), // 4 purple
+    rgb(60, 210, 200),  // 5 teal
+    rgb(250, 150, 50),  // 6 orange
+    rgb(200, 140, 80),  // 7 brown
+    rgb(235, 235, 235), // 8 white
+    rgb(160, 160, 160), // 9 gray
+];
+/// ENTER and Y: go ahead.
+pub const KEY_GO: Color = rgb(80, 210, 90);
+/// ESC and N: stop, go back.
+pub const KEY_STOP: Color = rgb(240, 80, 70);
+/// SPACE: shoot, cast, pick.
+pub const KEY_SPACE: Color = rgb(235, 235, 235);
+
+/// Where text names a key, so it can be drawn on a colored key cap:
+/// a menu number at the start ("2. Learn"), ENTER, ESC, SPACE, and Y/N questions.
+/// Returns (first char, chars, color) for each.
+fn key_marks(s: &str) -> Vec<(usize, usize, Color)> {
+    let c: Vec<char> = s.chars().collect();
+    let mut marks = Vec::new();
+    let start = c.iter().take_while(|&&ch| ch == ' ').count();
+    if let Some(d @ '1'..='9') = c.get(start).copied()
+        && c.get(start + 1) == Some(&'.')
+        && matches!(c.get(start + 2), None | Some(' '))
+    {
+        marks.push((start, 1, KEY_COLORS[d as usize - '1' as usize]));
+    }
+    let word = |i: usize, w: &str| {
+        let n = w.len();
+        let edge = |j: Option<&char>| !j.is_some_and(|ch| ch.is_ascii_alphanumeric());
+        c.len() >= i + n
+            && c[i..i + n].iter().copied().eq(w.chars())
+            && edge(i.checked_sub(1).and_then(|j| c.get(j)))
+            && edge(c.get(i + n))
+    };
+    for i in 0..c.len() {
+        if word(i, "ENTER") {
+            marks.push((i, 5, KEY_GO));
+        } else if word(i, "ESC") {
+            marks.push((i, 3, KEY_STOP));
+        } else if word(i, "SPACE") {
+            marks.push((i, 5, KEY_SPACE));
+        } else if word(i, "Y/N") {
+            marks.push((i, 1, KEY_GO));
+            marks.push((i + 2, 1, KEY_STOP));
+        } else if word(i, "Y or N") {
+            marks.push((i, 1, KEY_GO));
+            marks.push((i + 5, 1, KEY_STOP));
+        }
+    }
+    marks
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Font {
     Small,
@@ -129,10 +188,28 @@ impl Frame {
     }
 
     /// Draw text with its top-left corner at (x, y). Returns the width drawn.
+    /// Keys named in the text (menu numbers, ENTER, ESC, SPACE, Y/N) get colored key caps.
     pub fn text(&mut self, x: i32, y: i32, s: &str, c: Color, font: Font) -> i32 {
+        let cw = font.char_w();
+        let marks = key_marks(s);
+        for &(i, n, cap) in &marks {
+            self.rect(
+                x + i as i32 * cw - 1,
+                y - 1,
+                n as i32 * cw + 1,
+                font.line_h() + 1,
+                cap,
+            );
+        }
         let style = MonoTextStyle::new(font.mono(), c);
         let _ = Text::with_baseline(s, Point::new(x, y), style, Baseline::Top).draw(self);
-        s.chars().count() as i32 * font.char_w()
+        let ink = MonoTextStyle::new(font.mono(), BLACK);
+        for &(i, n, _) in &marks {
+            let part: String = s.chars().skip(i).take(n).collect();
+            let at = Point::new(x + i as i32 * cw, y);
+            let _ = Text::with_baseline(&part, at, ink, Baseline::Top).draw(self);
+        }
+        s.chars().count() as i32 * cw
     }
 
     pub fn text_center(&mut self, y: i32, s: &str, c: Color, font: Font) {
@@ -337,4 +414,30 @@ pub fn wrap(s: &str, cols: usize) -> Vec<String> {
         out.push(line);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_named_in_text_get_caps() {
+        assert_eq!(
+            key_marks("2. Learn about the trail"),
+            [(0, 1, KEY_COLORS[1])]
+        );
+        assert_eq!(key_marks("  5. Abe"), [(2, 1, KEY_COLORS[4])]);
+        assert_eq!(
+            key_marks("ENTER: continue  ESC: back"),
+            [(0, 5, KEY_GO), (17, 3, KEY_STOP)]
+        );
+        assert_eq!(
+            key_marks("Are these names correct? (Y/N)"),
+            [(26, 1, KEY_GO), (28, 1, KEY_STOP)]
+        );
+        // Not keys: years, ranges, words that only contain a key's name.
+        assert!(key_marks("1848. Independence").is_empty());
+        assert!(key_marks("Pick a trip 1-5.").is_empty());
+        assert!(key_marks("ESCAPED the river, ENTERED Oregon").is_empty());
+    }
 }
