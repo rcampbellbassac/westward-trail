@@ -116,19 +116,52 @@ canvas.addEventListener("pointerdown", () => { focusGame(); wakeAudio(); });
 // Let go of held keys when the game loses focus, so the hunter doesn't keep walking.
 canvas.addEventListener("blur", () => { for (const code of [...held]) send(code, false); });
 
-// On-screen keys for phones and tablets: <button data-key="1">, data-key="Enter", ...
-for (const btn of document.querySelectorAll("[data-key]")) {
-  const k = btn.dataset.key;
-  const code = k in SPECIAL ? SPECIAL[k] : k.codePointAt(0);
-  btn.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    if (!wasm) return;
-    wakeAudio();
-    focusGame();
-    send(code, true);
-  });
-  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
-    btn.addEventListener(ev, () => { if (wasm && held.has(code)) send(code, false); });
+// On-screen keyboard for phones and tablets, laid out like the Cardputer's.
+// Each key is [label, key, class]; SHIFT makes the next letter a capital.
+const PAD = [
+  [..."1234567890"].map((c) => [c, c]).concat([["DEL", "Backspace", "wide"]]),
+  [..."qwertyuiop"].map((c) => [c, c]),
+  [..."asdfghjkl"].map((c) => [c, c]).concat([["ENTER", "Enter", "wide"]]),
+  [["SHIFT", "Shift", "wide"]].concat([..."zxcvbnm,."].map((c) => [c, c])),
+  [["ESC", "Escape", "wide"], ["\u25c0", "ArrowLeft", "arrow"], ["\u25b2", "ArrowUp", "arrow"],
+    ["\u25bc", "ArrowDown", "arrow"], ["\u25b6", "ArrowRight", "arrow"], ["SPACE", " ", "space"], ["MENU", "`", "wide"]],
+];
+const padEl = document.getElementById("pad");
+let shift = false;
+const letters = [];
+function setShift(on) {
+  shift = on;
+  for (const b of letters) b.textContent = on ? b.dataset.key.toUpperCase() : b.dataset.key;
+  padEl.querySelector("[data-key=Shift]").classList.toggle("on", on);
+}
+for (const keys of PAD) {
+  const row = padEl.appendChild(document.createElement("div"));
+  row.className = "row";
+  for (const [label, k, cls] of keys) {
+    const btn = row.appendChild(document.createElement("button"));
+    btn.textContent = label;
+    btn.dataset.key = k;
+    if (cls) btn.className = cls;
+    if (k === "`") btn.title = "Your menu when playing together";
+    if (/^[a-z]$/.test(k)) letters.push(btn);
+    let code = null;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      if (!wasm) return;
+      wakeAudio();
+      focusGame();
+      if (k === "Shift") return setShift(!shift);
+      const key = shift && letters.includes(btn) ? k.toUpperCase() : k;
+      code = key in SPECIAL ? SPECIAL[key] : key.codePointAt(0);
+      send(code, true);
+      if (shift) setShift(false);
+    });
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
+      btn.addEventListener(ev, () => {
+        if (wasm && code !== null && held.has(code)) send(code, false);
+        code = null;
+      });
+    }
   }
 }
 

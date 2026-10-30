@@ -198,7 +198,7 @@ pub fn occupation_key(g: &mut Game, k: Key) -> Scene {
             g.t.party.clear();
             Scene::Names {
                 idx: 0,
-                buf: crate::net::leader_name(g),
+                buf: crate::net::party_name(g, 0),
             }
         }
         Some(i) if i == n + 1 => {
@@ -264,7 +264,7 @@ pub fn names_key(g: &mut Game, idx: usize, mut buf: String, k: Key) -> Scene {
             }
             return Scene::Names {
                 idx: idx + 1,
-                buf: String::new(),
+                buf: crate::net::party_name(g, idx + 1),
             };
         }
         Key::Backspace => {

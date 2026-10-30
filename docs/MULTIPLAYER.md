@@ -9,9 +9,13 @@ single-player game stays exactly as it is.
 |---|---|
 | 1. Core: lobby, shared seed, race screens | **Done.** Tested with three games talking through a pretend relay. |
 | 2. `trail-relay` on a home computer | **Done** and running on our home server. Two browsers raced through it. |
-| 3. Cardputer host (hotspot, serves the web game, relays) | **Built, testing on hardware.** |
-| 4. Cardputers as players (join a hotspot or the home relay) | **Built, not yet tested** (needs a second device). |
-| 5-9 | Not started. The host menu lists the other modes as "coming soon". |
+| 3. Cardputer host (hotspot, serves the web game, relays) | **Built, testing on hardware.** The host screen now counts devices on the Wi-Fi, pages loaded and players, to show where joining gets stuck. |
+| 4. Cardputers as players (join a hotspot or the home relay) | **Built, not yet working** on hardware: joining a Cardputer hotspot timed out (being looked into). |
+| 5. Wagon train | **Done.** Giving supplies between nearby wagons; messages from the list. |
+| 6. Democracy | **Done.** Played in two browsers. |
+| 7. One wagon, many drivers | **Done.** Played in two browsers. |
+| 8. Hunt together | **Done**, as its own game and inside the one-wagon games. Played in two browsers. |
+| 9. The standalone relay for other families | Not started. |
 
 ### Try it
 
@@ -78,6 +82,26 @@ instructions). We don't host it for other people.
 Why both serve the game themselves: the public GitHub Pages site is HTTPS, and browsers block an HTTPS page from
 talking to a plain `ws://` address on a home network. Loading the game from the hotspot or relay avoids that.
 
+## How the one-party games work
+
+In the wagon race and wagon train everyone runs their own trip, and the shared seed keeps their luck the same. In
+one wagon with many drivers, democracy, and hunting together there is only one trip, so only the host runs it. The
+host sends its **screen** to everyone else as text lines, and they send their **keys** back (`party.rs`,
+`stream.rs`):
+
+- Only rows that changed are sent, run-length coded and in base64, at most about 12 times a second, plus the
+  whole screen every 2.5 seconds for anyone who missed some. A menu that isn't changing sends nothing.
+- Watchers' keys arrive at the host as `key` lines. Who may press what:
+  - **One wagon:** only the driver. The turn passes to the next player each time the wagon sets off.
+  - **Democracy:** at a choice (size-up menu, pace, rations, rivers, trades, the Dalles, who to be) every number
+    is a vote. The vote ends when everyone has voted, when the timer runs out, or with no timer when the leader
+    presses ENTER. On a tie the leader's vote wins. The leader types names and shops, and anyone can turn the page
+    of a message. A player whose party member is gone is a ghost and can't vote.
+  - **Hunting:** everyone has their own hunter, in their own color with their initial over it.
+- The party members are the players, in the order they joined (the host leads).
+- A watcher presses ` (backtick) for their own menu: send a message or leave.
+- Lines are now up to 2048 characters (the relay and the Cardputer were raised from 512).
+
 ## How the code changes
 
 - The game core stays `no_std` and knows nothing about networks, just as it knows nothing about speakers:
@@ -90,7 +114,7 @@ talking to a plain `ws://` address on a home network. Loading the game from the 
 
 ## Milestones
 
-1. Core: lobby, shared seed, `NetMsg`, race screens, tested by running two games side by side in unit tests.
+1. Core: lobby, shared seed, race screens, tested by running two games side by side in unit tests.
 2. `trail-relay` on a home computer (home network only) serving the web game; browsers race each other.
 3. Cardputer host: hotspot with random password and QR code, serves the web game, relays.
 4. Cardputers as players (join a hotspot or the home relay).

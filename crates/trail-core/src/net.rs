@@ -1,4 +1,5 @@
-//! Playing together: the lobby and the wagon race.
+//! Playing together: the lobby, the wagon race and the wagon train.
+//! The one-party games (one wagon, democracy, hunting) live in [`crate::party`].
 //!
 //! The game never touches the network. Like beeps, it hands out short text
 //! lines ([`Game::take_net`]) for the platform to send, and takes lines in
@@ -17,6 +18,7 @@
 //! done   <host> <id> <points>                           made it to Oregon
 //! out    <host> <id>                                    everyone in the wagon is gone
 //! msg    <host> <id> <n>                                a message from the list
+//! give   <host> <from> <to> <item> <amount>             wagon train: supplies for another wagon
 //! leave  <host> <id>                                    a player left
 //! bye    <host>                                         the host closed the game
 //! ```
@@ -89,8 +91,34 @@ impl Mode {
         }
     }
 
-    fn ready(self) -> bool {
-        self == Mode::Race
+    /// Everyone drives their own wagon.
+    pub fn own_wagons(self) -> bool {
+        matches!(self, Mode::Race | Mode::Train)
+    }
+
+    /// The host runs the only trip and everyone else watches its screen.
+    pub fn one_party(self) -> bool {
+        !self.own_wagons()
+    }
+
+    fn about(self) -> &'static str {
+        match self {
+            Mode::Race => {
+                "Everyone drives their own wagon with the same luck. First to Oregon wins."
+            }
+            Mode::Train => {
+                "Everyone drives their own wagon, and wagons close together can give each other supplies."
+            }
+            Mode::Democracy => {
+                "One wagon. Each player is a party member, and the party votes on every choice."
+            }
+            Mode::Shared => {
+                "One wagon. Players take turns driving: the turn passes each time the wagon sets off."
+            }
+            Mode::Hunt => {
+                "Everyone hunts in the same field at once. Who brings back the most meat?"
+            }
+        }
     }
 
     fn code(self) -> &'static str {
@@ -206,6 +234,8 @@ pub struct Net {
     pub lobbies: Vec<Lobby>,
     pub settings: Settings,
     pub racing: bool,
+    /// The one-party games: whose turn, votes, the shared screen.
+    pub party: crate::party::Party,
     clock: u32,
     advert_in: u32,
     pos_in: u32,
@@ -242,6 +272,7 @@ impl Net {
                 vote_secs: 20,
             },
             racing: false,
+            party: crate::party::Party::default(),
             clock: 0,
             advert_in: 0,
             pos_in: 0,
@@ -249,10 +280,12 @@ impl Net {
     }
 
     pub fn take(&mut self) -> Vec<String> {
-        core::mem::take(&mut self.out)
+        let mut out = core::mem::take(&mut self.out);
+        out.append(self.party.out.get_mut());
+        out
     }
 
-    fn send(&mut self, line: String) {
+    pub(crate) fn send(&mut self, line: String) {
         if self.online && self.out.len() < 64 {
             self.out.push(line);
         }
@@ -279,12 +312,12 @@ impl Net {
         }
     }
 
-    fn color(&self, id: u32) -> Color {
+    pub(crate) fn color(&self, id: u32) -> Color {
         let i = self.players.iter().position(|p| p.id == id).unwrap_or(0);
         COLORS[i % MAX_PLAYERS]
     }
 
-    fn name_of(&self, id: u32) -> String {
+    pub(crate) fn name_of(&self, id: u32) -> String {
         self.players
             .iter()
             .find(|p| p.id == id)
@@ -312,6 +345,14 @@ pub enum Screen {
         last: bool,
     },
     Message,
+    /// Wagon train: giving supplies to another wagon (once one is picked).
+    Give(Option<u32>),
+    /// Watching the host's screen in a one-party game.
+    Remote,
+    /// A watcher's own menu.
+    RemoteMenu,
+    /// Hunting together: who got what.
+    HuntResults(Vec<(u32, u32)>),
 }
 
 // ---------------------------------------------------------------- lines in and out
@@ -366,6 +407,9 @@ pub fn receive(g: &mut Game, text: &str) {
     }
     if g.net.host != Some(host) {
         return; // someone else's game
+    }
+    if crate::party::receive(g, kind, &w) {
+        return;
     }
     let id = num(&w, 2).unwrap_or(0);
     if let Some(p) = g.net.players.iter_mut().find(|p| p.id == id) {
@@ -429,6 +473,15 @@ pub fn receive(g: &mut Game, text: &str) {
             if let Some(p) = g.net.players.iter_mut().find(|p| p.id == id) {
                 p.state = PeerState::Out;
                 p.alive = 0;
+            }
+        }
+        "give" if num(&w, 3) == Some(g.net.me) => {
+            let (item, amount) = (num(&w, 4).unwrap_or(99) as usize, num(&w, 5).unwrap_or(0));
+            if let Some(&(_, name, _)) = GIFTS.get(item) {
+                *gift_stock(g, item) += amount;
+                let who = g.net.name_of(id);
+                g.notify(format!("{who} gave you {amount} {name}!"));
+                g.tune(&[(784, 60), (988, 90)]);
             }
         }
         "msg" if id != g.net.me => {
@@ -496,7 +549,8 @@ pub fn tick(g: &mut Game, ms: u32) {
             send_roster(g);
         }
     }
-    if g.net.racing && g.net.host.is_some() {
+    crate::party::tick(g, ms);
+    if g.net.racing && g.net.host.is_some() && g.net.settings.mode.own_wagons() {
         g.net.pos_in = g.net.pos_in.saturating_sub(ms);
         if g.net.pos_in == 0 {
             g.net.pos_in = POS_MS;
@@ -515,14 +569,14 @@ pub fn tick(g: &mut Game, ms: u32) {
 
 /// Tell the other wagons something ("reached Fort Kearney").
 pub fn news(g: &mut Game, text: &str) {
-    if g.net.racing {
+    if g.net.racing && g.net.settings.mode.own_wagons() {
         let me = g.net.me;
         say(g, "news", &format!("{me} {text}"));
     }
 }
 
 pub fn finished(g: &mut Game, points: u32) {
-    if g.net.racing {
+    if g.net.racing && g.net.settings.mode.own_wagons() {
         let me = g.net.me;
         if let Some(p) = g.net.players.iter_mut().find(|p| p.id == me) {
             p.state = PeerState::Done(points);
@@ -533,7 +587,7 @@ pub fn finished(g: &mut Game, points: u32) {
 }
 
 pub fn wagon_lost(g: &mut Game) {
-    if g.net.racing {
+    if g.net.racing && g.net.settings.mode.own_wagons() {
         let me = g.net.me;
         if let Some(p) = g.net.players.iter_mut().find(|p| p.id == me) {
             p.state = PeerState::Out;
@@ -576,24 +630,156 @@ fn begin(g: &mut Game, seed: u32) -> Scene {
         p.miles = 0;
     }
     g.msgs.clear();
-    g.say(
-        "The race is on!",
-        format!(
-            "Everyone starts from Independence in {}, with the same luck. Press R on the trail to see who's ahead. First to Oregon wins, but points count too!",
-            setup::MONTH_NAMES[s.month as usize - 1]
-        ),
-    );
     g.tune(&[(523, 100), (659, 100), (784, 100), (1047, 200)]);
+    if s.mode.one_party() && !g.net.hosting() {
+        return crate::party::begin_watching(g);
+    }
+    let month = setup::MONTH_NAMES[s.month as usize - 1];
+    match s.mode {
+        Mode::Race => g.say(
+            "The race is on!",
+            format!(
+                "Everyone starts from Independence in {month}, with the same luck. Press R on the trail to see who's ahead. First to Oregon wins, but points count too!"
+            ),
+        ),
+        Mode::Train => g.say(
+            "The wagon train sets off!",
+            format!(
+                "Everyone leaves Independence in {month}. Press R on the trail to see the other wagons. Wagons within {NEAR} miles of each other can give supplies: press G there."
+            ),
+        ),
+        Mode::Shared => g.say(
+            "One wagon, many drivers",
+            "You all share one wagon. The driver makes every choice, and the turn passes to the next player each time the wagon sets off. You drive first!",
+        ),
+        Mode::Democracy => g.say(
+            "Democracy",
+            "You all share one wagon, and every big choice is a vote: everyone presses their pick. Most votes wins, and the leader breaks ties. The leader types names and shops.",
+        ),
+        Mode::Hunt => {}
+    }
+    if s.mode.one_party() {
+        crate::party::begin_host(g);
+    }
+    if s.mode == Mode::Hunt {
+        return hunt_round(g);
+    }
     Scene::Occupation
 }
 
-/// The party leader's name for a race: the player's own name.
-pub fn leader_name(g: &Game) -> String {
-    if g.net.racing {
+/// Hunting together: a fresh field, somewhere new along the trail.
+fn hunt_round(g: &mut Game) -> Scene {
+    g.t.miles = g.rng.below(g.data.trail_length());
+    g.t.sup.ammo = 999;
+    Scene::Hunt(alloc::boxed::Box::new(crate::hunt::HuntState::new(g)))
+}
+
+/// Hunting together: the round is over.
+pub fn hunt_over(g: &mut Game, results: Vec<(u32, u32)>) -> Scene {
+    g.tune(&[(523, 80), (659, 80), (784, 160)]);
+    Scene::Online(Screen::HuntResults(results))
+}
+
+/// A party member's name when playing together: your own name leads your
+/// wagon, and in a one-party game each player is a party member.
+pub fn party_name(g: &Game, i: usize) -> String {
+    if !g.net.racing {
+        return String::new();
+    }
+    if g.net.settings.mode.one_party() {
+        return g
+            .net
+            .players
+            .get(i)
+            .map_or_else(String::new, |p| p.name.clone());
+    }
+    if i == 0 {
         g.net.name.clone()
     } else {
         String::new()
     }
+}
+
+// ---------------------------------------------------------------- wagon train gifts
+
+/// Wagons this close can give each other supplies.
+pub const NEAR: u32 = 50;
+
+/// What one wagon can give another: (menu text, name in the note, amount).
+const GIFTS: [(&str, &str, u32); 6] = [
+    ("50 pounds of food", "pounds of food", 50),
+    ("1 ox", "ox", 1),
+    ("20 bullets", "bullets", 20),
+    ("1 set of clothing", "set of clothing", 1),
+    ("1 wagon wheel", "wagon wheel", 1),
+    ("1 wagon axle", "wagon axle", 1),
+];
+
+fn gift_stock(g: &mut Game, item: usize) -> &mut u32 {
+    let s = &mut g.t.sup;
+    match item {
+        0 => &mut s.food,
+        1 => &mut s.oxen,
+        2 => &mut s.ammo,
+        3 => &mut s.clothing,
+        4 => &mut s.wheels,
+        _ => &mut s.axles,
+    }
+}
+
+fn give_key(g: &mut Game, to: Option<u32>, k: Key) -> Scene {
+    if k == Key::Escape {
+        return Scene::Online(Screen::Standings { last: false });
+    }
+    let Some(n) = ui::digit(k) else {
+        return Scene::Online(Screen::Give(to));
+    };
+    let Some(to) = to else {
+        // Picking the wagon.
+        let others: Vec<u32> = g
+            .net
+            .players
+            .iter()
+            .filter(|p| p.id != g.net.me)
+            .map(|p| p.id)
+            .collect();
+        return match others.get(n.wrapping_sub(1)) {
+            Some(&id) => {
+                let p = g
+                    .net
+                    .players
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| (p.miles, p.state));
+                let far = p.map_or(u32::MAX, |(miles, _)| miles.abs_diff(g.t.miles));
+                if far > NEAR {
+                    g.notify(format!("Too far away: {far} miles!"));
+                    Scene::Online(Screen::Give(None))
+                } else if matches!(p, Some((_, PeerState::Done(_) | PeerState::Out))) {
+                    g.notify("That wagon's trip is over");
+                    Scene::Online(Screen::Give(None))
+                } else {
+                    Scene::Online(Screen::Give(Some(id)))
+                }
+            }
+            None => Scene::Online(Screen::Give(None)),
+        };
+    };
+    let Some(&(_, name, amount)) = GIFTS.get(n.wrapping_sub(1)) else {
+        return Scene::Online(Screen::Give(Some(to)));
+    };
+    let item = n - 1;
+    if *gift_stock(g, item) < amount {
+        g.notify("You don't have enough");
+        return Scene::Online(Screen::Give(Some(to)));
+    }
+    *gift_stock(g, item) -= amount;
+    let me = g.net.me;
+    say(g, "give", &format!("{me} {to} {item} {amount}"));
+    let who = g.net.name_of(to);
+    g.notify(format!("You gave {who} {amount} {name}"));
+    g.beep(784, 50);
+    Scene::Online(Screen::Give(Some(to)))
 }
 
 // ---------------------------------------------------------------- screens
@@ -758,10 +944,6 @@ pub fn key(g: &mut Game, s: Screen, k: Key) -> Scene {
             match k {
                 Key::Escape => return Scene::Online(Screen::Menu),
                 Key::Enter => {
-                    if !st.mode.ready() {
-                        g.notify("That game is coming soon!");
-                        return Scene::Online(Screen::Setup);
-                    }
                     g.net.host = Some(g.net.me);
                     g.net.players = alloc::vec![g.net.me_peer()];
                     g.net.advert_in = 0;
@@ -815,6 +997,9 @@ pub fn key(g: &mut Game, s: Screen, k: Key) -> Scene {
         },
         Screen::Standings { last } => match k {
             Key::Char('m' | 'M') if !last => Scene::Online(Screen::Message),
+            Key::Char('g' | 'G') if !last && g.net.settings.mode == Mode::Train => {
+                Scene::Online(Screen::Give(None))
+            }
             _ if last => {
                 leave(g);
                 Scene::TopTen
@@ -822,18 +1007,46 @@ pub fn key(g: &mut Game, s: Screen, k: Key) -> Scene {
             _ => Scene::SizeUp,
         },
         Screen::Message => {
+            let watching = crate::party::watching(g);
             if let Some(n) = ui::digit(k).filter(|n| (1..=MESSAGES.len()).contains(n)) {
                 let me = g.net.me;
                 say(g, "msg", &format!("{me} {}", n - 1));
                 g.notify(format!("You: {}", MESSAGES[n - 1]));
-                return Scene::SizeUp;
+                return if watching {
+                    Scene::Online(Screen::Remote)
+                } else {
+                    Scene::SizeUp
+                };
             }
-            if k == Key::Escape {
-                Scene::Online(Screen::Standings { last: false })
-            } else {
-                Scene::Online(Screen::Message)
+            match k {
+                Key::Escape if watching => Scene::Online(Screen::Remote),
+                Key::Escape => Scene::Online(Screen::Standings { last: false }),
+                _ => Scene::Online(Screen::Message),
             }
         }
+        Screen::Give(to) => give_key(g, to, k),
+        // Keys go to the host while watching (see party::local_key).
+        Screen::Remote => Scene::Online(Screen::Remote),
+        Screen::RemoteMenu => match ui::digit(k) {
+            Some(2) => Scene::Online(Screen::Message),
+            Some(3) => {
+                leave(g);
+                Scene::Online(Screen::Menu)
+            }
+            _ => Scene::Online(Screen::Remote),
+        },
+        Screen::HuntResults(r) => match k {
+            Key::Enter | Key::Char(' ') => {
+                g.net.party.shots.clear();
+                hunt_round(g)
+            }
+            Key::Escape => {
+                crate::party::end(g, "The hunt is over. Thanks for hunting!");
+                leave(g);
+                Scene::Online(Screen::Menu)
+            }
+            _ => Scene::Online(Screen::HuntResults(r)),
+        },
     }
 }
 
@@ -913,6 +1126,8 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                         y += 24;
                     }
                     f.text(x0, y, "Scan to join with a phone.", gfx::GRAY, Font::Small);
+                    // Who has joined so far, or what went wrong.
+                    f.text(x0, y + 12, &n.status, gfx::GREEN, Font::Small);
                 }
             }
             let footer = if n.online {
@@ -996,12 +1211,11 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 );
             }
             for (i, l) in n.lobbies.iter().take(7).enumerate() {
-                let open = if l.mode.ready() { "" } else { " (soon)" };
                 f.text(
                     6,
                     34 + i as i32 * 11,
                     &format!(
-                        "{}. Join {} - {}, {}/{}{open}",
+                        "{}. Join {} - {}, {}/{}",
                         i + 2,
                         l.name,
                         l.mode.name(),
@@ -1017,11 +1231,7 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
         Screen::Setup => {
             ui::header(f, "Host a game");
             let st = &n.settings;
-            let mode = if st.mode.ready() {
-                String::from(st.mode.name())
-            } else {
-                format!("{} (coming soon)", st.mode.name())
-            };
+            let mode = String::from(st.mode.name());
             let timer = if st.vote_secs == 0 {
                 String::from("no timer")
             } else {
@@ -1045,9 +1255,10 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 };
                 f.text(6, 18 + i as i32 * 12, r, c, Font::Normal);
             }
+            ui::para(f, 6, 80, st.mode.about(), gfx::GRAY);
             f.text(
                 6,
-                84,
+                114,
                 "Press a number to change it.",
                 gfx::GRAY,
                 Font::Small,
@@ -1092,10 +1303,10 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
         Screen::Standings { last } => {
             ui::header(
                 f,
-                if *last {
-                    "Race results"
-                } else {
-                    "Who's ahead?"
+                match (*last, n.settings.mode) {
+                    (true, _) => "Race results",
+                    (false, Mode::Train) => "The wagon train",
+                    _ => "Who's ahead?",
                 },
             );
             let mut order: Vec<&Peer> = n.players.iter().collect();
@@ -1126,8 +1337,117 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
             }
             let footer = if *last {
                 "Press any key."
+            } else if n.settings.mode == Mode::Train {
+                "M: message  G: give supplies  Other: back"
             } else {
                 "M: send a message   Any key: back"
+            };
+            ui::footer(f, footer);
+        }
+        Screen::Give(None) => {
+            ui::header(f, "Give supplies to...");
+            let mut y = 16;
+            for (i, p) in n.players.iter().filter(|p| p.id != n.me).enumerate() {
+                let far = p.miles.abs_diff(g.t.miles);
+                let (note, c) = match p.state {
+                    PeerState::Done(_) => (String::from("in Oregon"), gfx::GRAY),
+                    PeerState::Out => (String::from("trip over"), gfx::GRAY),
+                    _ if far <= NEAR => (format!("{far} miles away"), gfx::GREEN),
+                    _ => (format!("{far} miles: too far"), gfx::GRAY),
+                };
+                f.rect(6, y + 2, 6, 6, n.color(p.id));
+                f.text(
+                    16,
+                    y,
+                    &format!("{}. {}", i + 1, p.name),
+                    gfx::WHITE,
+                    Font::Normal,
+                );
+                f.text(130, y + 1, &note, c, Font::Small);
+                y += 12;
+            }
+            ui::para(
+                f,
+                6,
+                y + 4,
+                "Wagons within 50 miles of each other can share. Positions update every few seconds.",
+                gfx::GRAY,
+            );
+            ui::footer(f, "Pick a wagon.  ESC: back");
+        }
+        Screen::Give(Some(to)) => {
+            ui::header(f, &format!("Give to {}", n.name_of(*to)));
+            let s = &g.t.sup;
+            let have = [s.food, s.oxen, s.ammo, s.clothing, s.wheels, s.axles];
+            for (i, (what, _, _)) in GIFTS.iter().enumerate() {
+                let y = 16 + i as i32 * 12;
+                f.text(
+                    6,
+                    y,
+                    &format!("{}. {what}", i + 1),
+                    gfx::WHITE,
+                    Font::Normal,
+                );
+                f.text(
+                    150,
+                    y + 1,
+                    &format!("you have {}", have[i]),
+                    gfx::GRAY,
+                    Font::Small,
+                );
+            }
+            ui::footer(f, "Pick something to give.  ESC: back");
+        }
+        Screen::Remote => crate::party::render_remote(g, f),
+        Screen::RemoteMenu => {
+            ui::header(f, "Your menu");
+            ui::menu(
+                f,
+                6,
+                20,
+                &["Back to the game", "Send a message", "Leave the game"],
+            );
+            let host = n.host.map_or_else(String::new, |h| n.name_of(h));
+            ui::para(
+                f,
+                6,
+                64,
+                &format!(
+                    "You're playing {}, hosted by {host}.",
+                    n.settings.mode.name()
+                ),
+                gfx::GRAY,
+            );
+            ui::footer(f, "Pick one.");
+        }
+        Screen::HuntResults(results) => {
+            ui::header(f, "The hunt is over!");
+            let mut order: Vec<&(u32, u32)> = results.iter().collect();
+            order.sort_by_key(|(_, lbs)| u32::MAX - lbs);
+            let total: u32 = results.iter().map(|(_, lbs)| lbs).sum();
+            for (i, (id, lbs)) in order.iter().enumerate() {
+                let y = 16 + i as i32 * 12;
+                f.rect(6, y + 2, 6, 6, n.color(*id));
+                f.text(
+                    16,
+                    y,
+                    &format!("{}. {}", i + 1, n.name_of(*id)),
+                    gfx::WHITE,
+                    Font::Normal,
+                );
+                f.text(150, y, &format!("{lbs} lbs"), gfx::YELLOW, Font::Normal);
+            }
+            f.text(
+                6,
+                112,
+                &format!("Everyone together: {total} pounds of meat"),
+                gfx::GREEN,
+                Font::Small,
+            );
+            let footer = if n.hosting() {
+                "ENTER: hunt again  ESC: finish"
+            } else {
+                "Waiting for the host..."
             };
             ui::footer(f, footer);
         }
@@ -1157,7 +1477,8 @@ pub fn render_strip(g: &Game, f: &mut Frame, y: i32) {
     f.rect(4, y, W - 8, 1, gfx::rgb(60, 50, 30));
     for p in &n.players {
         let miles = if p.id == n.me { g.t.miles } else { p.miles } as i32;
-        let x = 4 + (W - 12) * miles.min(len) / len;
+        // East (the start) on the right, like the wagon heading west.
+        let x = W - 8 - (W - 12) * miles.min(len) / len;
         let c = n.color(p.id);
         f.rect(x, y - 2, 4, 4, c);
         if p.id == n.me {

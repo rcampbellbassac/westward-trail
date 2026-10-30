@@ -1,12 +1,15 @@
 //! Hunting: walk around, aim, and shoot before time runs out.
 //! Positions are "fixed point": 16 units = 1 pixel, so slow things move smoothly.
+//!
+//! Playing together, every player gets a hunter in the same field: the first
+//! is this device's, the others move by the keys their players send.
 
 use alloc::{format, string::String, vec::Vec};
 
 use crate::{
-    Game, Key, Scene,
+    Game, Held, Key, Scene,
     data::Terrain,
-    gfx::{self, Font, Frame, H, W},
+    gfx::{self, Color, Font, Frame, H, W},
     pictures, sprites,
     travel::{self, DayMode},
 };
@@ -34,6 +37,20 @@ struct Bullet {
     dx: i32,
     dy: i32,
     life: i32,
+    /// Which hunter fired it.
+    who: usize,
+}
+
+struct Hunter {
+    /// The player's id when hunting together (0 alone).
+    id: u32,
+    name: String,
+    color: Color,
+    x: i32,
+    y: i32,
+    face: (i32, i32),
+    step: u32,
+    lbs: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -44,18 +61,14 @@ enum Thing {
 }
 
 pub struct HuntState {
-    x: i32,
-    y: i32,
-    face: (i32, i32),
+    hunters: Vec<Hunter>,
     beasts: Vec<Beast>,
     bullets: Vec<Bullet>,
     things: Vec<(i32, i32, Thing)>,
     elapsed: u32,
     spawn_in: i32,
-    lbs: u32,
     flash: Option<(String, u32)>,
     terrain: Terrain,
-    step: u32,
 }
 
 fn thing_box(x: i32, y: i32, t: Thing) -> (i32, i32, i32, i32) {
@@ -85,25 +98,70 @@ impl HuntState {
         while (things.len() as i32) < count {
             let x = g.rng.range(4, W - 14);
             let y = g.rng.range(TOP + 4, H - 16);
-            if (x - 116).abs() < 24 && (y - 64).abs() < 24 {
-                continue; // keep the middle clear for the hunter
+            if (x - 116).abs() < 44 && (y - 64).abs() < 28 {
+                continue; // keep the middle clear for the hunters
             }
             things.push((x, y, kinds[g.rng.below(kinds.len() as u32) as usize]));
         }
+        // Everyone playing together hunts; alone, it's just you in red.
+        let mut hunters: Vec<Hunter> = Vec::new();
+        if crate::party::hosting(g) {
+            for p in &g.net.players {
+                hunters.push(Hunter {
+                    id: p.id,
+                    name: p.name.clone(),
+                    color: g.net.color(p.id),
+                    x: 0,
+                    y: 0,
+                    face: (16, 0),
+                    step: 0,
+                    lbs: 0,
+                });
+            }
+        }
+        if hunters.is_empty() {
+            hunters.push(Hunter {
+                id: 0,
+                name: String::from("You"),
+                color: gfx::RED,
+                x: 0,
+                y: 0,
+                face: (16, 0),
+                step: 0,
+                lbs: 0,
+            });
+        }
+        // Side by side in the middle.
+        let n = hunters.len() as i32;
+        for (i, h) in hunters.iter_mut().enumerate() {
+            h.x = (116 + (i as i32 * 2 - (n - 1)) * 10).clamp(4, W - 12) * FP;
+            h.y = (64 + if i % 2 == 0 { 0 } else { 8 }) * FP;
+        }
         HuntState {
-            x: 116 * FP,
-            y: 64 * FP,
-            face: (16, 0),
+            hunters,
             beasts: Vec::new(),
             bullets: Vec::new(),
             things,
             elapsed: 0,
             spawn_in: 600,
-            lbs: 0,
             flash: None,
             terrain,
-            step: 0,
         }
+    }
+
+    /// More than one hunter: playing together.
+    pub fn together(&self) -> bool {
+        self.hunters.len() > 1
+    }
+
+    /// Where each hunter stands, in pixels (for tests).
+    #[cfg(test)]
+    pub(crate) fn spots(&self) -> Vec<(i32, i32)> {
+        self.hunters.iter().map(|h| (h.x / FP, h.y / FP)).collect()
+    }
+
+    fn lbs(&self) -> u32 {
+        self.hunters.iter().map(|h| h.lbs).sum()
     }
 
     fn blocked(&self, x: i32, y: i32) -> bool {
@@ -151,35 +209,64 @@ fn spawn(g: &mut Game, h: &mut HuntState) {
 
 pub fn key(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, k: Key) -> Scene {
     match k {
-        Key::Escape => return finish(g, &h),
-        Key::Char(' ') | Key::Enter => {
-            if g.t.sup.ammo == 0 && !g.cheats.infinite_ammo {
-                h.flash = Some((String::from("Out of bullets!"), 1200));
-                g.beep(120, 60);
-            } else {
-                if !g.cheats.infinite_ammo {
-                    g.t.sup.ammo -= 1;
-                }
-                let (cx, cy) = (h.x + 4 * FP, h.y + 6 * FP);
-                h.bullets.push(Bullet {
-                    x: cx,
-                    y: cy,
-                    dx: h.face.0,
-                    dy: h.face.1,
-                    life: 700,
-                });
-                g.beep(90, 40);
-                for b in h.beasts.iter_mut().filter(|b| !b.dead) {
-                    if (b.x - cx).abs() < 90 * FP && (b.y - cy).abs() < 60 * FP && !b.fleeing {
-                        b.fleeing = true;
-                        b.vx = if b.x > cx { b.vx.abs() } else { -b.vx.abs() } * 17 / 10;
-                    }
-                }
-            }
-        }
+        // Hunting together the round runs its time, so nobody's hunt is cut short.
+        Key::Escape if !h.together() => return finish(g, &h),
+        Key::Char(' ') | Key::Enter => shoot(g, &mut h, 0),
         _ => {}
     }
     Scene::Hunt(h)
+}
+
+fn shoot(g: &mut Game, h: &mut HuntState, who: usize) {
+    if g.t.sup.ammo == 0 && !g.cheats.infinite_ammo {
+        h.flash = Some((String::from("Out of bullets!"), 1200));
+        g.beep(120, 60);
+        return;
+    }
+    if !g.cheats.infinite_ammo {
+        g.t.sup.ammo -= 1;
+    }
+    let hunter = &h.hunters[who];
+    let (cx, cy) = (hunter.x + 4 * FP, hunter.y + 6 * FP);
+    h.bullets.push(Bullet {
+        x: cx,
+        y: cy,
+        dx: hunter.face.0,
+        dy: hunter.face.1,
+        life: 700,
+        who,
+    });
+    g.beep(90, 40);
+    for b in h.beasts.iter_mut().filter(|b| !b.dead) {
+        if (b.x - cx).abs() < 90 * FP && (b.y - cy).abs() < 60 * FP && !b.fleeing {
+            b.fleeing = true;
+            b.vx = if b.x > cx { b.vx.abs() } else { -b.vx.abs() } * 17 / 10;
+        }
+    }
+}
+
+/// Walk one hunter, one axis at a time so they can slide along trees.
+fn walk(h: &mut HuntState, who: usize, held: Held, ms: u32) {
+    let dx = i32::from(held.right) - i32::from(held.left);
+    let dy = i32::from(held.down) - i32::from(held.up);
+    if dx == 0 && dy == 0 {
+        return;
+    }
+    let step = HUNTER_SPEED * ms as i32 * FP / 1000;
+    let (x, y) = (h.hunters[who].x, h.hunters[who].y);
+    let nx = x + dx * step;
+    let nx = if h.blocked(nx, y) { x } else { nx };
+    let ny = y + dy * step;
+    let ny = if h.blocked(nx, ny) { y } else { ny };
+    let me = &mut h.hunters[who];
+    me.face = match (dx, dy) {
+        (0, _) => (0, dy * 16),
+        (_, 0) => (dx * 16, 0),
+        _ => (dx * 11, dy * 11),
+    };
+    me.x = nx;
+    me.y = ny;
+    me.step += ms;
 }
 
 pub fn tick(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, ms: u32) -> Scene {
@@ -190,26 +277,16 @@ pub fn tick(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, ms: u32) -> Scene
         return finish(g, &h);
     }
 
-    // Move the hunter, one axis at a time so you can slide along trees.
-    let held = g.held;
-    let dx = i32::from(held.right) - i32::from(held.left);
-    let dy = i32::from(held.down) - i32::from(held.up);
-    if dx != 0 || dy != 0 {
-        h.face = match (dx, dy) {
-            (0, _) => (0, dy * 16),
-            (_, 0) => (dx * 16, 0),
-            _ => (dx * 11, dy * 11),
-        };
-        let step = HUNTER_SPEED * dt * FP / 1000;
-        let nx = h.x + dx * step;
-        if !h.blocked(nx, h.y) {
-            h.x = nx;
+    // This device's hunter, then everyone else's by the keys they sent.
+    walk(&mut h, 0, g.held, ms);
+    for i in 1..h.hunters.len() {
+        let held = g.net.party.held_of(h.hunters[i].id);
+        walk(&mut h, i, held, ms);
+    }
+    for id in core::mem::take(&mut g.net.party.shots) {
+        if let Some(i) = h.hunters.iter().position(|x| x.id == id) {
+            shoot(g, &mut h, i);
         }
-        let ny = h.y + dy * step;
-        if !h.blocked(h.x, ny) {
-            h.y = ny;
-        }
-        h.step += ms;
     }
 
     // Animals.
@@ -236,7 +313,7 @@ pub fn tick(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, ms: u32) -> Scene
         .retain(|b| b.dead || (b.x > -40 * FP && b.x < (W + 40) * FP));
 
     // Bullets fly until they hit a tree, an animal, or run out of range.
-    let mut hits: Vec<usize> = Vec::new();
+    let mut hits: Vec<(usize, usize)> = Vec::new();
     let animals = &g.data.animals;
     let HuntState {
         bullets,
@@ -258,23 +335,31 @@ pub fn tick(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, ms: u32) -> Scene
         }
         let hit = beasts.iter().enumerate().position(|(i, b)| {
             let s = sprites::animal(&animals[b.kind].sprite);
-            !b.dead && !hits.contains(&i) && overlaps(p, (b.x / FP, b.y / FP, s.w(), s.h()))
+            !b.dead
+                && !hits.iter().any(|(j, _)| *j == i)
+                && overlaps(p, (b.x / FP, b.y / FP, s.w(), s.h()))
         });
         match hit {
             Some(i) => {
-                hits.push(i);
+                hits.push((i, bl.who));
                 false
             }
             None => true,
         }
     });
-    for i in hits {
+    for (i, who) in hits {
         let a = &g.data.animals[h.beasts[i].kind];
         let (name, lo, hi) = (a.name.clone(), a.min_lbs, a.max_lbs);
         let lbs = g.rng.range(lo as i32, hi as i32) as u32;
         h.beasts[i].dead = true;
-        h.lbs += lbs;
-        h.flash = Some((format!("You got a {name}! +{lbs} lbs"), 1500));
+        let hunter = &mut h.hunters[who];
+        hunter.lbs += lbs;
+        let text = if h.hunters.len() > 1 {
+            format!("{} got a {name}! +{lbs}", h.hunters[who].name)
+        } else {
+            format!("You got a {name}! +{lbs} lbs")
+        };
+        h.flash = Some((text, 1500));
         g.tune(&[(330, 50), (494, 80)]);
     }
     if let Some((_, t)) = &mut h.flash {
@@ -287,20 +372,27 @@ pub fn tick(g: &mut Game, mut h: alloc::boxed::Box<HuntState>, ms: u32) -> Scene
 }
 
 fn finish(g: &mut Game, h: &HuntState) -> Scene {
-    let body = if h.lbs == 0 {
+    if g.net.racing && g.net.settings.mode == crate::net::Mode::Hunt {
+        let results = h.hunters.iter().map(|x| (x.id, x.lbs)).collect();
+        return crate::net::hunt_over(g, results);
+    }
+    // Each hunter carries their share back.
+    let (lbs, carry) = (h.lbs(), CARRY * h.hunters.len() as u32);
+    let mut body = if lbs == 0 {
         String::from("You didn't get anything this time. Better luck next time!")
-    } else if h.lbs > CARRY {
+    } else if lbs > carry {
         format!(
-            "From the animals you shot, you got {} pounds of meat. But you could only carry {CARRY} pounds back to the wagon.",
-            h.lbs
+            "From the animals you shot, you got {lbs} pounds of meat. But you could only carry {carry} pounds back to the wagon."
         )
     } else {
-        format!(
-            "From the animals you shot, you got {} pounds of meat.",
-            h.lbs
-        )
+        format!("From the animals you shot, you got {lbs} pounds of meat.")
     };
-    g.t.sup.food += h.lbs.min(CARRY);
+    if h.together() {
+        for x in &h.hunters {
+            body.push_str(&format!("\n{}: {} lbs", x.name, x.lbs));
+        }
+    }
+    g.t.sup.food += lbs.min(carry);
     g.say("Hunting", body);
     travel::sim_day(g, DayMode::Busy);
     if g.t.alive_count() == 0 {
@@ -336,15 +428,21 @@ pub fn render(g: &Game, f: &mut Frame, h: &HuntState) {
             f.sprite(b.x / FP, b.y / FP, s, b.vx < 0);
         }
     }
-    let (hx, hy) = (h.x / FP, h.y / FP);
-    f.sprite(hx, hy, &sprites::HUNTER, h.face.0 < 0);
-    let (cx, cy) = (hx + 4, hy + 6);
-    for i in 2..8 {
-        f.pixel(
-            cx + h.face.0 * i / 16,
-            cy + h.face.1 * i / 16,
-            gfx::DARK_GRAY,
-        );
+    for hunter in &h.hunters {
+        let (hx, hy) = (hunter.x / FP, hunter.y / FP);
+        f.sprite_accent(hx, hy, &sprites::HUNTER, hunter.face.0 < 0, hunter.color);
+        let (cx, cy) = (hx + 4, hy + 6);
+        for i in 2..8 {
+            f.pixel(
+                cx + hunter.face.0 * i / 16,
+                cy + hunter.face.1 * i / 16,
+                gfx::DARK_GRAY,
+            );
+        }
+        if h.together() {
+            let initial: String = hunter.name.chars().take(1).collect();
+            f.text(hx + 2, hy - 8, &initial, hunter.color, Font::Small);
+        }
     }
     for bl in &h.bullets {
         f.rect(bl.x / FP, bl.y / FP, 2, 2, gfx::BLACK);
@@ -356,10 +454,15 @@ pub fn render(g: &Game, f: &mut Frame, h: &HuntState) {
     } else {
         format!("{}", g.t.sup.ammo)
     };
+    let ammo = if g.net.racing && g.net.settings.mode == crate::net::Mode::Hunt {
+        String::from("lots")
+    } else {
+        ammo
+    };
     f.text(
         3,
         2,
-        &format!("Bullets {ammo}   Meat {} lbs   Time {left}", h.lbs),
+        &format!("Bullets {ammo}   Meat {} lbs   Time {left}", h.lbs()),
         gfx::WHITE,
         Font::Small,
     );

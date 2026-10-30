@@ -51,7 +51,7 @@ impl RiverState {
 }
 
 #[derive(Clone, Copy)]
-enum Opt {
+pub(crate) enum Opt {
     Ford,
     Float,
     Ferry(u32),
@@ -61,7 +61,7 @@ enum Opt {
     Fish,
 }
 
-fn options(g: &Game, r: &RiverState) -> Vec<(Opt, String)> {
+pub(crate) fn options(g: &Game, r: &RiverState) -> Vec<(Opt, String)> {
     let l = &g.data.landmarks[r.idx];
     let mut v = alloc::vec![
         (Opt::Ford, String::from("Attempt to ford the river")),

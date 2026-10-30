@@ -54,4 +54,8 @@ Copy it, change the word and the message, rebuild. Then make one that *does* som
 - Hunting time limit and how much you can carry: the top of `hunt.rs`
 - Gathering time, basket size and what poisonous plants do: `forage.rs`
 
-Run `cargo test -p trail-core` after big changes. A robot plays 40 whole trips to check nothing broke.
+Run `cargo test -p trail-core` after big changes. A robot plays 40 whole trips to check nothing broke, and pretend
+players try every way of playing together.
+
+To look at screens without a device: `TRAIL_SHOTS=/some/folder cargo test -p trail-core shots` saves the map and
+travel screens there as BMP pictures. Add more scenes to the `shots` test in `lib.rs`.

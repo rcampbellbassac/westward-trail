@@ -22,6 +22,7 @@ mod fish;
 mod forage;
 mod hunt;
 mod net;
+mod party;
 mod pictures;
 mod raft;
 mod river;
@@ -29,6 +30,7 @@ mod save;
 mod score;
 mod setup;
 mod store;
+mod stream;
 mod terminal;
 mod travel;
 mod ui;
@@ -58,6 +60,18 @@ pub enum Key {
 pub struct Beep {
     pub hz: u16,
     pub ms: u16,
+}
+
+/// Track a key going down or up, for the action mini-games.
+pub(crate) fn set_held(h: &mut Held, k: Key, down: bool) {
+    match k {
+        Key::Up | Key::Char('w' | 'W' | ';') => h.up = down,
+        Key::Down | Key::Char('s' | 'S' | '.') => h.down = down,
+        Key::Left | Key::Char('a' | 'A' | ',') => h.left = down,
+        Key::Right | Key::Char('d' | 'D' | '/') => h.right = down,
+        Key::Char(' ') => h.fire = down,
+        _ => {}
+    }
 }
 
 /// Keys currently held down, for the action mini-games.
@@ -294,7 +308,23 @@ impl Game {
     }
 
     pub fn key_down(&mut self, k: Key) {
-        self.set_held(k, true);
+        // Playing together: the key may belong to someone else's game, or be a vote.
+        if party::local_key(self, k, true) {
+            return;
+        }
+        self.press(k);
+    }
+
+    pub fn key_up(&mut self, k: Key) {
+        if party::local_key(self, k, false) {
+            return;
+        }
+        self.release(k);
+    }
+
+    /// Press a key in this game, whoever pressed it.
+    pub(crate) fn press(&mut self, k: Key) {
+        set_held(&mut self.held, k, true);
         let in_terminal = matches!(self.scene, Scene::Terminal(_));
         if matches!(k, Key::Char('`' | '~')) && !in_terminal && !self.in_action_game() {
             let prev = core::mem::replace(&mut self.scene, Scene::Title);
@@ -310,8 +340,8 @@ impl Game {
         self.scene = self.on_key(scene, k);
     }
 
-    pub fn key_up(&mut self, k: Key) {
-        self.set_held(k, false);
+    pub(crate) fn release(&mut self, k: Key) {
+        set_held(&mut self.held, k, false);
     }
 
     pub fn tick(&mut self, ms: u32) {
@@ -350,7 +380,9 @@ impl Game {
             f.outline(x, 2, w, 13, gfx::GREEN);
             f.text(x + 4, 4, text, gfx::WHITE, gfx::Font::Normal);
         }
+        party::overlay(self, f);
         f.apply_theme(self.cheats.theme);
+        party::share(self, f);
     }
 
     /// Notes to play since the last call.
@@ -385,6 +417,10 @@ impl Game {
     /// The platform tells the game whether the relay for playing together is reachable.
     pub fn set_online(&mut self, online: bool) {
         self.net.online = online;
+        if !online {
+            // A hotspot that stopped is gone: show why instead of its old QR code.
+            self.net.host_info = None;
+        }
     }
 
     /// What this platform's network can do (the Cardputer can host and join Wi-Fi games).
@@ -443,18 +479,6 @@ impl Game {
             self.scene,
             Scene::Hunt(_) | Scene::Fish(_) | Scene::Raft(_) | Scene::Forage(_)
         )
-    }
-
-    fn set_held(&mut self, k: Key, down: bool) {
-        let h = &mut self.held;
-        match k {
-            Key::Up | Key::Char('w' | 'W' | ';') => h.up = down,
-            Key::Down | Key::Char('s' | 'S' | '.') => h.down = down,
-            Key::Left | Key::Char('a' | 'A' | ',') => h.left = down,
-            Key::Right | Key::Char('d' | 'D' | '/') => h.right = down,
-            Key::Char(' ') => h.fire = down,
-            _ => {}
-        }
     }
 
     pub(crate) fn beep(&mut self, hz: u16, ms: u16) {
@@ -523,8 +547,8 @@ impl Game {
             Scene::Fish(s) => fish::key(self, s, k),
             Scene::Forage(s) => forage::key(self, s, k),
             Scene::Raft(r) => Scene::Raft(r),
-            Scene::Score(_) => score::after_score(self),
-            Scene::GameOver => Scene::Title,
+            Scene::Score(lines) => score::after_score(self, &lines),
+            Scene::GameOver => score::after_game_over(self),
             Scene::Terminal(t) => terminal::key(self, t, k),
             Scene::Slots(s) => save::key(self, s, k),
             Scene::Online(s) => net::key(self, s, k),
@@ -745,6 +769,28 @@ mod tests {
         }
         assert!(matches!(g.scene, Scene::SizeUp));
         g
+    }
+
+    /// `TRAIL_SHOTS=/some/dir cargo test -p trail-core shots` saves screens as BMPs to look at.
+    #[test]
+    fn shots() {
+        let Ok(dir) = std::env::var("TRAIL_SHOTS") else {
+            return;
+        };
+        let mut g = start_trip(7);
+        g.t.miles = 700;
+        g.t.next = g
+            .data
+            .landmarks
+            .iter()
+            .position(|l| l.mile > 700)
+            .unwrap_or(1);
+        let mut f = Frame::new();
+        for (name, scene) in [("map", Scene::Map), ("travel", Scene::Travel { acc_ms: 0 })] {
+            g.scene = scene;
+            g.render(&mut f);
+            std::fs::write(std::format!("{dir}/{name}.bmp"), f.to_bmp()).unwrap();
+        }
     }
 
     #[test]
@@ -1010,6 +1056,240 @@ mod tests {
                 .as_ref()
                 .is_some_and(|(t, _)| t.contains("Race you"))
         );
+    }
+
+    fn pump_all(games: &mut [Game]) {
+        let mut refs: Vec<&mut Game> = games.iter_mut().collect();
+        pump(&mut refs);
+    }
+
+    /// Ann hosts a game of the mode `steps` presses along the list, everyone
+    /// else joins, and Ann starts it.
+    fn together(steps: usize, names: &[&str]) -> Vec<Game> {
+        let mut games: Vec<Game> = (0..names.len()).map(|i| Game::new(10 + i as u64)).collect();
+        for (g, name) in games.iter_mut().zip(names) {
+            g.set_online(true);
+            g.key_down(Key::Char('5'));
+            type_in(g, name);
+        }
+        games[0].key_down(Key::Char('1'));
+        for _ in 0..steps {
+            games[0].key_down(Key::Char('1'));
+        }
+        games[0].key_down(Key::Enter);
+        for g in games.iter_mut() {
+            g.tick(1600);
+        }
+        pump_all(&mut games);
+        for g in games.iter_mut().skip(1) {
+            g.key_down(Key::Char('2'));
+        }
+        pump_all(&mut games);
+        assert_eq!(games[0].net.players.len(), names.len());
+        games[0].key_down(Key::Enter);
+        pump_all(&mut games);
+        for g in games.iter_mut() {
+            g.tick(16);
+        }
+        games
+    }
+
+    /// The host draws, its screen goes out, and the watchers draw it too.
+    fn share_screens(games: &mut [Game]) -> Frame {
+        let mut f = Frame::new();
+        games[0].net.party.tx.get_mut().tick(1000);
+        games[0].render(&mut f);
+        pump_all(games);
+        f
+    }
+
+    #[test]
+    fn wagon_train_gives_supplies() {
+        let mut games = together(1, &["Ann", "Bob"]);
+        assert_eq!(games[0].net.settings.mode, net::Mode::Train);
+        for g in games.iter_mut() {
+            race_setup(g);
+        }
+        let food = games[0].t.sup.food;
+        let b = &mut games[1];
+        b.key_down(Key::Char('r'));
+        b.key_down(Key::Char('g'));
+        assert!(matches!(b.scene, Scene::Online(net::Screen::Give(None))));
+        b.key_down(Key::Char('1'));
+        b.key_down(Key::Char('1'));
+        let mut f = Frame::new();
+        b.render(&mut f);
+        pump_all(&mut games);
+        assert_eq!(games[0].t.sup.food, food + 50, "Ann gets Bob's food");
+        assert_eq!(games[1].t.sup.food, 750);
+    }
+
+    #[test]
+    fn one_wagon_many_drivers() {
+        let mut games = together(3, &["Ann", "Bob"]);
+        assert_eq!(games[0].net.settings.mode, net::Mode::Shared);
+        assert!(matches!(games[1].scene, Scene::Online(net::Screen::Remote)));
+        assert!(matches!(games[0].scene, Scene::Occupation));
+
+        // Bob sees exactly Ann's screen.
+        let f = share_screens(&mut games);
+        let mut seen = Frame::new();
+        games[1].toast = None; // Bob's own note ("press ` for your menu")
+        games[1].render(&mut seen);
+        assert!(seen.px == f.px, "the watcher's screen matches the host's");
+
+        // Bob isn't driving yet: his keys don't count.
+        games[1].key_down(Key::Enter);
+        pump_all(&mut games);
+        assert!(!games[0].msgs.is_empty());
+
+        // Ann sets up; party members are the players.
+        race_setup(&mut games[0]);
+        assert_eq!(games[0].t.party[1].name, "Bob");
+
+        // Setting off passes the turn to Bob.
+        games[0].key_down(Key::Char('1'));
+        games[0].tick(16);
+        assert_eq!(games[0].net.party.driver, games[1].net.me);
+        pump_all(&mut games);
+        assert_eq!(games[1].net.party.driver, games[1].net.me);
+        // Drive on to the next choice: a landmark or the first river.
+        for _ in 0..3000 {
+            games[0].tick(100);
+            if !games[0].msgs.is_empty() {
+                games[1].key_down(Key::Enter);
+                games[1].key_up(Key::Enter);
+                pump_all(&mut games);
+            } else if matches!(games[0].scene, Scene::SizeUp | Scene::River(_)) {
+                break;
+            }
+            let _ = games[0].take_net();
+        }
+        let at_river = matches!(games[0].scene, Scene::River(_));
+        let choice = |g: &Game| match &g.scene {
+            Scene::River(r) => r.crossing.is_none() && g.msgs.is_empty(),
+            Scene::SizeUp => g.msgs.is_empty(),
+            _ => false,
+        };
+        assert!(choice(&games[0]), "should be at a choice");
+        let pick = if at_river { '3' } else { '2' };
+        games[0].key_down(Key::Char(pick));
+        assert!(choice(&games[0]), "Ann isn't driving");
+        games[1].key_down(Key::Char(pick));
+        pump_all(&mut games);
+        assert!(!choice(&games[0]), "Bob is");
+    }
+
+    #[test]
+    fn democracy_votes() {
+        let mut games = together(2, &["Ann", "Bob", "Cy"]);
+        assert_eq!(games[0].net.settings.mode, net::Mode::Democracy);
+        clear_msgs(&mut games[0]);
+        // Everyone votes on who to be: two votes for banker wins.
+        games[0].key_down(Key::Char('1'));
+        assert!(
+            matches!(games[0].scene, Scene::Occupation),
+            "one vote isn't enough"
+        );
+        games[1].key_down(Key::Char('2'));
+        games[2].key_down(Key::Char('2'));
+        pump_all(&mut games);
+        assert!(matches!(games[0].scene, Scene::Names { .. }));
+        assert_eq!(games[0].t.occupation, 1);
+
+        // The leader types the names and shops.
+        for _ in 0..5 {
+            games[0].key_down(Key::Enter);
+        }
+        games[0].key_down(Key::Char('y'));
+        clear_msgs(&mut games[0]);
+        for (item, qty) in [('1', "3"), ('2', "800")] {
+            games[0].key_down(Key::Char(item));
+            type_in(&mut games[0], qty);
+            clear_msgs(&mut games[0]);
+        }
+        games[0].key_down(Key::Enter);
+        clear_msgs(&mut games[0]);
+        assert!(matches!(games[0].scene, Scene::SizeUp));
+        assert_eq!(games[0].t.party[2].name, "Cy");
+
+        // Everyone picks "change pace".
+        for g in games.iter_mut() {
+            g.key_down(Key::Char('4'));
+        }
+        pump_all(&mut games);
+        assert!(matches!(games[0].scene, Scene::Pace));
+
+        // Cy's party member has gone home, so Cy is a ghost; a tie goes to the leader.
+        games[0].t.party[2].gone = true;
+        games[0].key_down(Key::Char('3'));
+        games[1].key_down(Key::Char('2'));
+        games[2].key_down(Key::Char('1'));
+        pump_all(&mut games);
+        assert!(matches!(games[0].scene, Scene::SizeUp));
+        assert_eq!(games[0].t.pace, 2, "the leader's vote breaks the tie");
+
+        // Only Bob votes, and the timer decides.
+        games[1].key_down(Key::Char('2'));
+        pump_all(&mut games);
+        let f = share_screens(&mut games);
+        let _ = f;
+        for _ in 0..40 {
+            games[0].tick(250);
+        }
+        assert!(matches!(games[0].scene, Scene::SizeUp), "10 seconds in");
+        for _ in 0..41 {
+            games[0].tick(250);
+        }
+        assert!(
+            matches!(games[0].scene, Scene::Supplies),
+            "20 seconds: time's up"
+        );
+    }
+
+    #[test]
+    fn hunting_together() {
+        let mut games = together(4, &["Ann", "Bob"]);
+        assert_eq!(games[0].net.settings.mode, net::Mode::Hunt);
+        let start = match &games[0].scene {
+            Scene::Hunt(h) => {
+                assert!(h.together());
+                h.spots()
+            }
+            _ => panic!("the host should be hunting"),
+        };
+        assert_eq!(start.len(), 2);
+        // Typing "Ann" left the A key (walk left) down; let go of it.
+        games[0].held = Held::default();
+        // Bob walks right.
+        games[1].key_down(Key::Right);
+        pump_all(&mut games);
+        games[0].tick(200);
+        games[1].key_up(Key::Right);
+        pump_all(&mut games);
+        games[0].tick(200);
+        let Scene::Hunt(h) = &games[0].scene else {
+            panic!("still hunting");
+        };
+        let now = h.spots();
+        assert_eq!(now[0], start[0], "Ann didn't move");
+        assert!(now[1].0 > start[1].0, "Bob walked right");
+        let _ = share_screens(&mut games);
+
+        // Time runs out; everyone sees the results; Ann finishes.
+        for _ in 0..140 {
+            games[0].tick(250);
+        }
+        assert!(matches!(
+            games[0].scene,
+            Scene::Online(net::Screen::HuntResults(_))
+        ));
+        clear_msgs(&mut games[0]);
+        games[0].key_down(Key::Escape);
+        pump_all(&mut games);
+        games[1].tick(16);
+        assert!(!games[1].net.racing);
+        assert!(matches!(games[1].scene, Scene::Online(net::Screen::Menu)));
     }
 
     #[test]

@@ -97,8 +97,8 @@ pub const OX: [Sprite; 2] = [
 
 pub const HUNTER: Sprite = Sprite {
     rows: &[
-        "..bbb...", ".bbbbb..", "..sss...", "..sks...", ".rrrrr..", "rrrrrrr.", "s.rrr.s.",
-        "..rrr...", "..uuu...", "..u.u...", "..u.u...", ".kk.kk..",
+        "..bbb...", ".bbbbb..", "..sss...", "..sks...", ".xxxxx..", "xxxxxxx.", "s.xxx.s.",
+        "..xxx...", "..uuu...", "..u.u...", "..u.u...", ".kk.kk..",
     ],
 };
 

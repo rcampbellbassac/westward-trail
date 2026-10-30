@@ -174,11 +174,28 @@ pub fn render_score(g: &Game, f: &mut Frame, lines: &[(String, u32)]) {
     ui::footer(f, "Press any key to see the Top Ten.");
 }
 
-pub fn after_score(g: &mut Game) -> Scene {
+pub fn after_score(g: &mut Game, lines: &[(String, u32)]) -> Scene {
+    if crate::party::hosting(g) {
+        let total = lines.last().map_or(0, |(_, p)| *p);
+        crate::party::end(
+            g,
+            &alloc::format!("The party made it to Oregon with {total} points! Hooray!"),
+        );
+        crate::net::leave(g);
+        return Scene::TopTen;
+    }
     if g.net.racing {
         return Scene::Online(crate::net::Screen::Standings { last: true });
     }
     Scene::TopTen
+}
+
+pub fn after_game_over(g: &mut Game) -> Scene {
+    if crate::party::hosting(g) {
+        crate::party::end(g, "The party's trip is over. Maybe next time!");
+        crate::net::leave(g);
+    }
+    Scene::Title
 }
 
 pub fn render_top_ten(g: &Game, f: &mut Frame) {

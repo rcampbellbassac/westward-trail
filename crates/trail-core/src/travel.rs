@@ -704,7 +704,7 @@ pub fn travel_key(_g: &mut Game, acc_ms: u32, k: Key) -> Scene {
 // ---------------------------------------------------------------- size up the situation
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Act {
+pub(crate) enum Act {
     Continue,
     Supplies,
     Map,
@@ -720,7 +720,7 @@ fn here(g: &Game) -> Option<&crate::data::Landmark> {
     g.t.at.and_then(|i| g.data.landmarks.get(i))
 }
 
-fn actions(g: &Game) -> Vec<(Act, &'static str)> {
+pub(crate) fn actions(g: &Game) -> Vec<(Act, &'static str)> {
     let mut v = alloc::vec![
         (Act::Continue, "Continue on trail"),
         (Act::Supplies, "Check supplies"),
@@ -741,7 +741,7 @@ fn actions(g: &Game) -> Vec<(Act, &'static str)> {
     v
 }
 
-fn can_fish(g: &Game) -> bool {
+pub(crate) fn can_fish(g: &Game) -> bool {
     here(g).is_some_and(|l| {
         matches!(l.kind, Kind::River | Kind::Dalles | Kind::Fort | Kind::Town)
             || l.picture == "springs"
@@ -778,9 +778,15 @@ pub fn render_sizeup(g: &Game, f: &mut Frame) {
         items.push(String::from("F. Go fishing"));
     }
     items.push(String::from("G. Gather food"));
-    if g.net.racing {
-        items.push(String::from("R. Race standings"));
-    } else {
+    if g.net.racing && g.net.settings.mode.own_wagons() {
+        items.push(String::from(
+            if g.net.settings.mode == crate::net::Mode::Train {
+                "R. Wagon train"
+            } else {
+                "R. Race standings"
+            },
+        ));
+    } else if !g.net.racing {
         items.push(String::from("S. Save trip"));
     }
     let per_col = items.len().div_ceil(2);
@@ -820,7 +826,7 @@ pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
             return Scene::Fish(alloc::boxed::Box::default());
         }
         Key::Char('g' | 'G') => return crate::forage::start(g),
-        Key::Char('r' | 'R') if g.net.racing => {
+        Key::Char('r' | 'R') if g.net.racing && g.net.settings.mode.own_wagons() => {
             return Scene::Online(crate::net::Screen::Standings { last: false });
         }
         Key::Char('s' | 'S') if !g.net.racing => {
@@ -903,8 +909,9 @@ pub fn render_supplies(g: &Game, f: &mut Frame) {
     ui::footer(f, "Press any key. (orange = sick)");
 }
 
+/// The trail runs east to west, so Missouri is on the right and Oregon on the left.
 fn map_point(g: &Game, mile: u32, i: i32) -> Point {
-    let x = 10 + (mile * 220 / g.data.trail_length()) as i32;
+    let x = 230 - (mile * 220 / g.data.trail_length()) as i32;
     let y = 74 + ((i * 5) % 7 - 3) * 3 - (mile as i32 * 12 / g.data.trail_length() as i32);
     Point::new(x, y)
 }
@@ -931,7 +938,7 @@ fn map_at(g: &Game, miles: u32) -> Point {
 pub fn render_map(g: &Game, f: &mut Frame) {
     ui::header(f, "Map of the trail");
     f.rect(0, 12, W, 113, gfx::rgb(200, 180, 130));
-    for (cx, w) in [(118, 30), (135, 24), (195, 20)] {
+    for (cx, w) in [(122, 30), (105, 24), (45, 20)] {
         pictures::mountain(f, cx, 40, 62, w, gfx::rgb(150, 130, 100), false);
     }
     let lms = &g.data.landmarks;
@@ -973,14 +980,17 @@ pub fn render_map(g: &Game, f: &mut Frame) {
     if (g.clock / 300) % 2 == 0 {
         f.rect(here.x - 2, here.y - 2, 5, 5, gfx::RED);
     }
+    let start = lms[0].name.split(',').next().unwrap_or("");
     f.text(
-        4,
+        W - 4 - 5 * start.chars().count() as i32,
         108,
-        lms[0].name.split(',').next().unwrap_or(""),
+        start,
         gfx::BLACK,
         Font::Small,
     );
-    f.text(196, 108, "Oregon", gfx::BLACK, Font::Small);
+    f.text(4, 108, "Oregon", gfx::BLACK, Font::Small);
+    f.text(W - 30, 14, "N", gfx::BLACK, Font::Small);
+    f.text(W - 40, 22, "W   E", gfx::BLACK, Font::Small);
     let next_name = lms.get(g.t.next).map_or("", |l| l.name.as_str());
     f.text(
         4,

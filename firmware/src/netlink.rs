@@ -17,6 +17,7 @@ use std::{
     net::{Ipv4Addr, SocketAddrV4, TcpStream, UdpSocket},
     sync::{
         mpsc::{Receiver, Sender},
+        atomic::{AtomicU32, Ordering},
         Arc, Mutex,
     },
     time::Duration,
@@ -34,7 +35,7 @@ use esp_idf_svc::{
     nvs::{EspDefaultNvsPartition, EspNvs, NvsDefault},
     wifi::{
         AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration,
-        EspWifi,
+        EspWifi, WifiEvent,
     },
     ws::FrameType,
 };
@@ -49,7 +50,8 @@ const TRAIL_WASM: &[u8] = include_bytes!("../../web/trail.wasm");
 
 const HOTSPOT_PREFIX: &str = "WestwardTrail-";
 const DISCOVERY_PORT: u16 = 8851;
-const MAX_LINE: usize = 512;
+/// Lines longer than this are dropped (the shared screen sends up to about 1500).
+const MAX_LINE: usize = 2048;
 
 /// From the game to the network.
 pub enum Command {
@@ -114,7 +116,7 @@ pub fn run(
         }
     }
     let mut wifi = match EspWifi::new(modem, sysloop.clone(), Some(nvs))
-        .and_then(|w| BlockingWifi::wrap(w, sysloop))
+        .and_then(|w| BlockingWifi::wrap(w, sysloop.clone()))
     {
         Ok(w) => w,
         Err(e) => {
@@ -127,7 +129,7 @@ pub fn run(
             return;
         };
         let result = match command {
-            Command::Host => host(&mut wifi, &events, &commands),
+            Command::Host => host(&mut wifi, &sysloop, &events, &commands),
             Command::Join {
                 ssid,
                 password,
@@ -161,11 +163,13 @@ type Peers = Arc<Mutex<Vec<esp_idf_svc::http::server::ws::EspHttpWsDetachedSende
 
 fn host(
     wifi: &mut BlockingWifi<EspWifi<'static>>,
+    sysloop: &EspSystemEventLoop,
     events: &Sender<Event>,
     commands: &Receiver<Command>,
 ) -> Result<()> {
     let ssid = format!("{HOTSPOT_PREFIX}{:04X}", random_u32() & 0xFFFF);
     let password = new_password();
+    let _ = events.send(Event::Status(String::from("Starting the hotspot...")));
     let _ = wifi.stop();
     wifi.set_configuration(&Configuration::AccessPoint(AccessPointConfiguration {
         ssid: ssid.as_str().try_into().map_err(|_| anyhow!("bad hotspot name"))?,
@@ -175,25 +179,37 @@ fn host(
         max_connections: 8,
         ..Default::default()
     }))?;
-    wifi.start()?;
-    wifi.wait_netif_up()?;
+    wifi.start()
+        .map_err(|e| anyhow!("Hotspot didn't start ({e})"))?;
+    wifi.wait_netif_up()
+        .map_err(|e| anyhow!("Hotspot network didn't come up ({e})"))?;
     log::info!("hotspot {ssid} is up");
 
-    let (modules, size) = qr(&format!("WIFI:T:WPA;S:{ssid};P:{password};;"));
-    let _ = events.send(Event::HostInfo(HostInfo {
-        ssid,
-        password,
-        address: String::from("http://192.168.4.1"),
-        qr: modules,
-        qr_size: size,
-    }));
+    // What the host screen shows under the QR code, so problems can be seen
+    // without a computer: devices on the Wi-Fi, pages loaded, players in the game.
+    let counts = Arc::new([AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)]);
+    let report = {
+        let (counts, events) = (counts.clone(), Mutex::new(events.clone()));
+        Arc::new(move |which: usize, delta: i32| {
+            let c = &counts[which];
+            let v = c.load(Ordering::Relaxed).saturating_add_signed(delta);
+            c.store(v, Ordering::Relaxed);
+            let [wifi, pages, players] = [0, 1, 2].map(|i| counts[i].load(Ordering::Relaxed));
+            let text = format!("Wi-Fi {wifi} Pages {pages} Players {players}");
+            log::info!("{text}");
+            if let Ok(tx) = events.lock() {
+                let _ = tx.send(Event::Status(text));
+            }
+        })
+    };
 
     let mut server = EspHttpServer::new(&HttpConfig {
         max_open_sockets: 12,
         lru_purge_enable: true,
         stack_size: 10 * 1024,
         ..Default::default()
-    })?;
+    })
+    .map_err(|e| anyhow!("Web server didn't start ({e})"))?;
     for (path, body, kind) in [
         ("/", INDEX_HTML, "text/html; charset=utf-8"),
         ("/index.html", INDEX_HTML, "text/html; charset=utf-8"),
@@ -201,25 +217,29 @@ fn host(
         ("/trail.wasm", TRAIL_WASM, "application/wasm"),
         ("/relay.json", b"{\"relay\":true}".as_slice(), "application/json"),
     ] {
+        let report = report.clone();
         server.fn_handler(path, Method::Get, move |req| {
+            if path == "/" || path == "/index.html" {
+                report(1, 1);
+            }
             req.into_response(200, Some("OK"), &[("Content-Type", kind)])?
                 .write_all(body)
         })?;
     }
 
     let peers: Peers = Arc::default();
-    let (ws_peers, ws_events) = (peers.clone(), Mutex::new(events.clone()));
+    let (ws_peers, ws_events, ws_report) = (peers.clone(), Mutex::new(events.clone()), report.clone());
     server.ws_handler("/ws", move |ws| {
         let mut all = ws_peers.lock().map_err(|_| anyhow!("lock"))?;
         if ws.is_new() {
             all.push(ws.create_detached_sender()?);
-            log::info!("player joined ({} connected)", all.len());
+            ws_report(2, 1);
             return Ok::<(), anyhow::Error>(());
         }
         if ws.is_closed() {
             let gone = ws.session();
             all.retain(|p| p.session() != gone);
-            log::info!("player left ({} connected)", all.len());
+            ws_report(2, -1);
             return Ok(());
         }
         let (_, len) = ws.recv(&mut [])?;
@@ -240,6 +260,24 @@ fn host(
         }
         Ok(())
     })?;
+
+    let wifi_report = report.clone();
+    let _stations = sysloop.subscribe::<WifiEvent, _>(move |event| match event {
+        WifiEvent::ApStaConnected(_) => wifi_report(0, 1),
+        WifiEvent::ApStaDisconnected(_) => wifi_report(0, -1),
+        _ => {}
+    })?;
+
+    // Everything is ready: now show the QR code.
+    let (modules, size) = qr(&format!("WIFI:T:WPA;S:{ssid};P:{password};;"));
+    let _ = events.send(Event::HostInfo(HostInfo {
+        ssid,
+        password,
+        address: String::from("http://192.168.4.1"),
+        qr: modules,
+        qr_size: size,
+    }));
+    report(0, 0);
     let _ = events.send(Event::Online(true));
 
     // Lines from the game on this Cardputer go to everyone connected.
@@ -387,7 +425,7 @@ impl WsClient {
 
     /// Text lines that have arrived (none if nothing has).
     fn poll(&mut self) -> Result<Vec<String>> {
-        let mut chunk = [0u8; 512];
+        let mut chunk = [0u8; 2048];
         match self.stream.read(&mut chunk) {
             Ok(0) => bail!("Lost the connection"),
             Ok(n) => self.buf.extend_from_slice(&chunk[..n]),

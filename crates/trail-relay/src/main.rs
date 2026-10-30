@@ -36,8 +36,9 @@ const DISCOVERY_PORT: u16 = 8851;
 
 /// Most players at once, across all games on this relay.
 const MAX_CLIENTS: usize = 32;
-/// Game lines are short; anything longer is dropped.
-const MAX_LINE: usize = 512;
+/// Game lines are short, except the shared screen's (up to about 1500);
+/// anything longer is dropped.
+const MAX_LINE: usize = 2048;
 
 type Clients = Arc<Mutex<HashMap<u64, Sender<String>>>>;
 

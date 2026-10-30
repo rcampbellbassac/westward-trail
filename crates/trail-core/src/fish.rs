@@ -177,7 +177,7 @@ pub fn render(g: &Game, f: &mut Frame, s: &FishState) {
         H - WATER_TOP + 6,
         gfx::rgb(110, 170, 70),
     );
-    f.sprite(30, WATER_TOP - 16, &sprites::HUNTER, false);
+    f.sprite_accent(30, WATER_TOP - 16, &sprites::HUNTER, false, gfx::RED);
     let rod_tip = (52, WATER_TOP - 22);
     for i in 0..16 {
         f.pixel(36 + i, WATER_TOP - 10 - i * 12 / 16, gfx::DARK_BROWN);

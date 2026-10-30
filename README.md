@@ -92,9 +92,10 @@ cargo run -p trail-core --example screens -- /tmp/shots   # PPM screenshots of e
 - Web page verified in Node (all exports, mod loading, error messages); not yet clicked through in a browser.
 - Flashed to both Cardputers on 2026-10-27. The Advanced build (keyboard mapping and ES8311 codec setup
   taken from M5Stack's M5Cardputer/M5Unified code) boots and plays; a full playthrough on each is still to do.
-- **Playing together** (title menu 5): the wagon race works in browsers through `trail-relay` on a home computer, and a
-  Cardputer can host its own hotspot that phones join in a browser. Wagon train, democracy and the rest are next.
-  See `docs/MULTIPLAYER.md`.
+- **Playing together** (title menu 5): five games for up to 8 players, through `trail-relay` on a home computer or a
+  Cardputer's own hotspot. The wagon race and wagon train give everyone their own wagon; one wagon with many
+  drivers, democracy and hunting together share one game, whose screen the host sends to everyone. All five were
+  played in browsers through the relay; Cardputer hosting is being tested. See `docs/MULTIPLAYER.md`.
 - Ideas next: trail forks (Sublette Cutoff, Fort Walla Walla vs. The Dalles), tombstones with epitaphs
   saved for the next player, saving a trip in progress, high scores on the Cardputer's SD card.
 
