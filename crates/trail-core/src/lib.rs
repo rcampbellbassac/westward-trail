@@ -21,6 +21,7 @@ pub mod sprites;
 mod fish;
 mod forage;
 mod hunt;
+mod icons;
 mod net;
 mod party;
 mod pictures;

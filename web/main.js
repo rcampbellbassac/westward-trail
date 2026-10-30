@@ -129,14 +129,16 @@ const PAD_LEFT = [[["ESC", "Escape"], ["MENU", "`"]], [["SPACE", " "]]];
 const PAD_ARROWS = [null, ["\u25b2", "ArrowUp", "arrow"], null,
   ["\u25c0", "ArrowLeft", "arrow"], ["\u25bc", "ArrowDown", "arrow"], ["\u25b6", "ArrowRight", "arrow"]];
 // Key colors match the game's (KEY_COLORS in gfx.rs): each number its own color,
-// ENTER and Y green for go, ESC and N red for stop, SPACE white.
+// ENTER and Y green for go, ESC and N red for stop, SPACE white, the trail's letter
+// choices (Hunt, Fish, Gather, Race, Save) tan.
 const KEY_COLORS = ["#5aa0ff", "#fadc46", "#ff78be", "#b982ff", "#3cd2c8", "#fa9632", "#c88c50", "#ebebeb", "#a0a0a0"];
-const GO = "#50d25a", STOP = "#f05046", SPACE = "#ebebeb";
+const GO = "#50d25a", STOP = "#f05046", SPACE = "#ebebeb", LETTER = "#dcbe82";
 const keyColor = (k) =>
   /^[1-9]$/.test(k) ? KEY_COLORS[k - 1]
     : k === "Enter" || k === "y" ? GO
     : k === "Escape" || k === "n" ? STOP
-    : k === " " ? SPACE : null;
+    : k === " " ? SPACE
+    : "hfgrs".includes(k) && k.length === 1 ? LETTER : null;
 const padEl = document.getElementById("pad");
 let shift = false;
 const letters = [];

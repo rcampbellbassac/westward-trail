@@ -26,7 +26,8 @@ project isn't affiliated with them. The code, text and pixel art here are origin
   keeps its `saved = N` number, so a tie goes to the card and edits on a computer load)
 - **Color-coded keys** for players who can't read yet: every menu number sits on its own colored key cap (1 blue,
   2 yellow, 3 pink...), ENTER and Y are green, ESC and N red, SPACE white. The on-screen keyboard (always on phones,
-  **Show keys** with a mouse) uses the same colors, so "press the pink one" works.
+  **Show keys** with a mouse) uses the same colors, so "press the pink one" works. Every menu choice also has a
+  little picture beside it (a wagon to travel, a fish to go fishing, a trophy for the Top Ten...): `icons.rs`.
 - **Screenshots**: the Screenshot button on the web, Fn+P on the Cardputer (`WESTWARD/SHOT0001.BMP` on the SD card)
 - SD cards can be **FAT32 or exFAT**. `firmware/components/fatfs` is ESP-IDF's FatFs component with exFAT switched on
   (`FF_FS_EXFAT 1` in `src/ffconf.h`); it replaces the built-in copy. Its files keep their own licenses.

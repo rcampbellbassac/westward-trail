@@ -67,19 +67,34 @@ pub const KEY_GO: Color = rgb(80, 210, 90);
 pub const KEY_STOP: Color = rgb(240, 80, 70);
 /// SPACE: shoot, cast, pick.
 pub const KEY_SPACE: Color = rgb(235, 235, 235);
+/// Letter choices on the trail ("H. Go hunting").
+pub const KEY_LETTER: Color = rgb(220, 190, 130);
+
+/// A menu line's key and where its text starts: "  2. Learn" is (2, '2', "Learn").
+fn menu_line(c: &[char]) -> Option<(usize, char)> {
+    let start = c.iter().take_while(|&&ch| ch == ' ').count();
+    let key = *c.get(start)?;
+    let ok = c.get(start + 1) == Some(&'.')
+        && match key {
+            '1'..='9' => matches!(c.get(start + 2), None | Some(' ')),
+            'A'..='Z' => c.get(start + 2) == Some(&' ') && c.len() > start + 3,
+            _ => false,
+        };
+    ok.then_some((start, key))
+}
 
 /// Where text names a key, so it can be drawn on a colored key cap:
-/// a menu number at the start ("2. Learn"), ENTER, ESC, SPACE, and Y/N questions.
+/// a menu key at the start ("2. Learn", "H. Go hunting"), ENTER, ESC, SPACE, and Y/N questions.
 /// Returns (first char, chars, color) for each.
 fn key_marks(s: &str) -> Vec<(usize, usize, Color)> {
     let c: Vec<char> = s.chars().collect();
     let mut marks = Vec::new();
-    let start = c.iter().take_while(|&&ch| ch == ' ').count();
-    if let Some(d @ '1'..='9') = c.get(start).copied()
-        && c.get(start + 1) == Some(&'.')
-        && matches!(c.get(start + 2), None | Some(' '))
-    {
-        marks.push((start, 1, KEY_COLORS[d as usize - '1' as usize]));
+    if let Some((start, key)) = menu_line(&c) {
+        let cap = match key {
+            '1'..='9' => KEY_COLORS[key as usize - '1' as usize],
+            _ => KEY_LETTER,
+        };
+        marks.push((start, 1, cap));
     }
     let word = |i: usize, w: &str| {
         let n = w.len();
@@ -188,10 +203,38 @@ impl Frame {
     }
 
     /// Draw text with its top-left corner at (x, y). Returns the width drawn.
-    /// Keys named in the text (menu numbers, ENTER, ESC, SPACE, Y/N) get colored key caps.
+    /// Keys named in the text (menu numbers, ENTER, ESC, SPACE, Y/N) get colored key caps,
+    /// and a menu line gets its picture in place of the ". " after the key.
     pub fn text(&mut self, x: i32, y: i32, s: &str, c: Color, font: Font) -> i32 {
         let cw = font.char_w();
-        let marks = key_marks(s);
+        let chars: Vec<char> = s.chars().collect();
+        let picture = menu_line(&chars)
+            .filter(|_| cw == 6)
+            .and_then(|(start, _)| {
+                let label: String = chars[start + 2..].iter().collect();
+                crate::icons::for_label(label.trim()).map(|p| (start, p))
+            });
+        if let Some((start, p)) = picture {
+            let mut plain = chars.clone();
+            plain[start + 1] = ' ';
+            let plain: String = plain.into_iter().collect();
+            self.text_caps(x, y, &plain, key_marks(s), c, font);
+            self.sprite(x + (start as i32 + 1) * cw + 1, y, p, false);
+            return chars.len() as i32 * cw;
+        }
+        self.text_caps(x, y, s, key_marks(s), c, font)
+    }
+
+    fn text_caps(
+        &mut self,
+        x: i32,
+        y: i32,
+        s: &str,
+        marks: Vec<(usize, usize, Color)>,
+        c: Color,
+        font: Font,
+    ) -> i32 {
+        let cw = font.char_w();
         for &(i, n, cap) in &marks {
             self.rect(
                 x + i as i32 * cw - 1,
