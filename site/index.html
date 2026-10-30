@@ -196,6 +196,20 @@
   .pad .arrow { font-family: system-ui, sans-serif; font-size: 16px; }
   .pad .space { flex-grow: 4; }
   .pad .on { background: var(--gold); color: #000; }
+  .pad .bottom { gap: 8px; }
+  .pad .bottom .left { flex: 8 1 0; display: flex; flex-direction: column; gap: 5px; }
+  .pad .bottom .arrows { flex: 3.3 1 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .pad .arrows button { width: 100%; }
+  .pad { margin-bottom: 36px; }
+  dialog.ask { border-radius: 10px; padding: 18px 20px; max-width: 330px; text-align: center; }
+  dialog.ask::backdrop { background: #0009; }
+  dialog.ask p { margin: 0 0 8px; }
+  dialog.ask .small { font-size: 0.85em; opacity: 0.8; margin-bottom: 16px; }
+  dialog.ask form { display: flex; gap: 10px; justify-content: center; }
+  dialog.ask button { min-height: 44px; padding: 0 14px; white-space: nowrap; }
+  dialog.ask { background: #1a1730; color: var(--ink); border: 2px solid var(--gold); font-family: var(--pixel); font-size: 11px; line-height: 1.6; }
+  dialog.ask button { font-family: var(--pixel); font-size: 10px; background: #fff1; color: var(--ink); border: 2px solid #fff3; border-radius: 8px; }
+  dialog.ask button[value=yes] { background: var(--gold); color: #2a1a05; }
   @media (pointer: coarse) { .pad { display: flex; } }
 
   #mod {

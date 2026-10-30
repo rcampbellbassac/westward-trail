@@ -98,7 +98,7 @@ function send(code, down) {
 }
 
 function onKey(e, down) {
-  if (!wasm) return;
+  if (!wasm || paused) return;
   if (embedded && document.activeElement !== canvas) return;
   if (modPanel.contains(document.activeElement) && document.activeElement !== canvas) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -123,9 +123,11 @@ const PAD = [
   [..."qwertyuiop"].map((c) => [c, c]),
   [..."asdfghjkl"].map((c) => [c, c]).concat([["ENTER", "Enter", "wide"]]),
   [["SHIFT", "Shift", "wide"]].concat([..."zxcvbnm,."].map((c) => [c, c])),
-  [["ESC", "Escape", "wide"], ["\u25c0", "ArrowLeft", "arrow"], ["\u25b2", "ArrowUp", "arrow"],
-    ["\u25bc", "ArrowDown", "arrow"], ["\u25b6", "ArrowRight", "arrow"], ["SPACE", " ", "space"], ["MENU", "`", "wide"]],
 ];
+// The bottom: ESC, MENU and SPACE on the left, the arrows as an upside-down T on the right.
+const PAD_LEFT = [[["ESC", "Escape"], ["MENU", "`"]], [["SPACE", " "]]];
+const PAD_ARROWS = [null, ["\u25b2", "ArrowUp", "arrow"], null,
+  ["\u25c0", "ArrowLeft", "arrow"], ["\u25bc", "ArrowDown", "arrow"], ["\u25b6", "ArrowRight", "arrow"]];
 const padEl = document.getElementById("pad");
 let shift = false;
 const letters = [];
@@ -134,35 +136,51 @@ function setShift(on) {
   for (const b of letters) b.textContent = on ? b.dataset.key.toUpperCase() : b.dataset.key;
   padEl.querySelector("[data-key=Shift]").classList.toggle("on", on);
 }
-for (const keys of PAD) {
-  const row = padEl.appendChild(document.createElement("div"));
-  row.className = "row";
-  for (const [label, k, cls] of keys) {
-    const btn = row.appendChild(document.createElement("button"));
-    btn.textContent = label;
-    btn.dataset.key = k;
-    if (cls) btn.className = cls;
-    if (k === "`") btn.title = "Your menu when playing together";
-    if (/^[a-z]$/.test(k)) letters.push(btn);
-    let code = null;
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      if (!wasm) return;
-      wakeAudio();
-      focusGame();
-      if (k === "Shift") return setShift(!shift);
-      const key = shift && letters.includes(btn) ? k.toUpperCase() : k;
-      code = key in SPECIAL ? SPECIAL[key] : key.codePointAt(0);
-      send(code, true);
-      if (shift) setShift(false);
+function div(parent, cls) {
+  const d = parent.appendChild(document.createElement("div"));
+  d.className = cls;
+  return d;
+}
+function padKey(parent, [label, k, cls]) {
+  const btn = parent.appendChild(document.createElement("button"));
+  btn.textContent = label;
+  btn.dataset.key = k;
+  if (cls) btn.className = cls;
+  if (k === "`") btn.title = "Your menu when playing together";
+  if (/^[a-z]$/.test(k)) letters.push(btn);
+  let code = null;
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!wasm || paused) return;
+    wakeAudio();
+    focusGame();
+    if (k === "Shift") return setShift(!shift);
+    const key = shift && letters.includes(btn) ? k.toUpperCase() : k;
+    code = key in SPECIAL ? SPECIAL[key] : key.codePointAt(0);
+    send(code, true);
+    if (shift) setShift(false);
+  });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
+    btn.addEventListener(ev, () => {
+      if (wasm && code !== null && held.has(code)) send(code, false);
+      code = null;
     });
-    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) {
-      btn.addEventListener(ev, () => {
-        if (wasm && code !== null && held.has(code)) send(code, false);
-        code = null;
-      });
-    }
   }
+}
+for (const keys of PAD) {
+  const row = div(padEl, "row");
+  for (const key of keys) padKey(row, key);
+}
+const bottom = div(padEl, "row bottom");
+const left = div(bottom, "left");
+for (const keys of PAD_LEFT) {
+  const row = div(left, "row");
+  for (const key of keys) padKey(row, key);
+}
+const arrows = div(bottom, "arrows");
+for (const key of PAD_ARROWS) {
+  if (key) padKey(arrows, key);
+  else div(arrows, "gap");
 }
 
 // ---- main loop ----
@@ -170,9 +188,13 @@ let last = performance.now();
 let frames = 0, fpsTime = last;
 const fpsEl = document.getElementById("fps");
 
+// While the restart question is up the game stands still.
+let paused = false;
+
 function frame(now) {
   const dt = Math.min(250, now - last);
   last = now;
+  if (paused) return requestAnimationFrame(frame);
   wasm.trail_tick(Math.round(dt));
   playBeeps();
   sendNet();
@@ -318,12 +340,27 @@ document.getElementById("reset").onclick = () => {
   setStatus("Back to the original trail.", true);
 };
 
-document.getElementById("restart").onclick = () => {
-  const mod = store.get(MOD_KEY);
-  wasm.trail_init(Date.now() >>> 0);
-  if (mod) applyMod(mod, true);
-  else loadSlots();
+// Restart asks first, with the game paused, since the button sits near the keys.
+const ask = document.createElement("dialog");
+ask.className = "ask";
+ask.innerHTML = `<p>Restart the game?</p><p class="small">Your trip so far is lost. Saved trips are kept.</p>
+  <form method="dialog"><button value="no" autofocus>Keep playing</button> <button value="yes">Restart</button></form>`;
+document.body.appendChild(ask);
+ask.addEventListener("close", () => {
+  paused = false;
+  if (ask.returnValue === "yes") {
+    const mod = store.get(MOD_KEY);
+    wasm.trail_init(Date.now() >>> 0);
+    if (mod) applyMod(mod, true);
+    else loadSlots();
+  }
   focusGame();
+});
+document.getElementById("restart").onclick = () => {
+  for (const code of [...held]) send(code, false);
+  paused = true;
+  ask.returnValue = "no";
+  ask.showModal();
 };
 
 const soundBtn = document.getElementById("sound");
