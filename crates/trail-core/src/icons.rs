@@ -516,6 +516,37 @@ pub static HELP: Sprite = icon(&[
     "....rr....",
 ]);
 
+pub static RUNNER: Sprite = icon(&[
+    "......bb..",
+    "......ss..",
+    "...uuuuu..",
+    "..s..uu.s.",
+    ".....uu...",
+    ".....bbb..",
+    "....b...b.",
+    "..bb....b.",
+    "..k.....kk",
+]);
+pub static SLED: Sprite = icon(&[
+    ".....rrr..",
+    ".....sss..",
+    "....rrrr..",
+    "...rrrrrs.",
+    ".bbbbbbbbb",
+    ".k......k.",
+    "kkkkkkkkk.",
+]);
+pub static BALL: Sprite = icon(&[
+    "...rrrr...",
+    "..rrrrrr..",
+    ".rwrrrrrr.",
+    ".yyyyyyyy.",
+    ".yyyyyyyy.",
+    ".uuuuuuuu.",
+    "..uuuuuu..",
+    "...uuuu...",
+]);
+
 /// Words in a menu line, and its picture. Earlier rows win, so "Wagon wheels" is a wheel
 /// and "Caulk the wagon and float" a raft. A word starting with ^ must begin the line
 /// (or follow its "Name: "), so a saved trip's date doesn't turn into a month.
@@ -562,6 +593,10 @@ pub static PICKS: &[(&[&str], &Sprite)] = &[
     (&["map"], &MAP),
     (&["save", "saved"], &CHEST),
     (&["top ten"], &TROPHY),
+    (&["fun and games", "play a game"], &BALL),
+    (&["foot race"], &RUNNER),
+    (&["sled"], &SLED),
+    (&["wagon race"], &WAGON),
     (&["race"], &FLAG),
     (&["democracy", "vote"], &BALLOT),
     (&["back to"], &BACK),
@@ -614,6 +649,11 @@ mod tests {
             ("See the Top Ten", &TROPHY),
             ("Load a saved trip", &CHEST),
             ("Play together", &PEOPLE),
+            ("Fun and games", &BALL),
+            ("Play a game", &BALL),
+            ("Wagon race", &WAGON),
+            ("Foot race", &RUNNER),
+            ("Sled race", &SLED),
             ("Younger pioneers", &HEART),
             ("Banker from Boston", &MONEY),
             ("Find out the differences", &QUESTION),

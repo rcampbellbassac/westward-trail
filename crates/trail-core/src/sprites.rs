@@ -324,3 +324,60 @@ pub fn animal(name: &str) -> &'static Sprite {
         _ => &RABBIT,
     }
 }
+
+/// A runner facing right, for the foot race: two running steps and a jump.
+/// `x` is the shirt, so each runner can wear their own color.
+pub const RUNNER: [Sprite; 3] = [
+    Sprite {
+        rows: &[
+            "...bbb..", "..bbbbb.", "...sss..", "...ssk..", "..xxxx..", ".sxxxxs.", "...xxx..",
+            "...uuu..", "..uu.uu.", ".uu...uu", "kk.....k",
+        ],
+    },
+    Sprite {
+        rows: &[
+            "...bbb..", "..bbbbb.", "...sss..", "...ssk..", "..xxxx..", "..xxxxs.", "..sxxx..",
+            "...uuu..", "...uu...", "...uu...", "...kk...",
+        ],
+    },
+    Sprite {
+        rows: &[
+            "...bbb..", "..bbbbb.", "...sss..", "s..ssk.s", ".sxxxxs.", "..xxxx..", "...xxx..",
+            "...uuu..", "..uu.uu.", "..kk.kk.", "........",
+        ],
+    },
+];
+
+/// A child on a sled, heading down the hill (toward the bottom of the screen).
+/// `x` is the hat and coat.
+pub const SLEDDER: Sprite = Sprite {
+    rows: &[
+        "...xxxx...",
+        "..xxxxxx..",
+        "...ssss...",
+        "...skks...",
+        "..xxxxxx..",
+        ".sxxxxxxs.",
+        "..xxxxxx..",
+        ".bbbbbbbb.",
+        ".bBBBBBBb.",
+        ".k......k.",
+    ],
+};
+
+/// A snowy evergreen tree.
+pub const PINE: Sprite = Sprite {
+    rows: &[
+        "....G....",
+        "...GwG...",
+        "..GGGGG..",
+        "...GGG...",
+        "..GwGGG..",
+        ".GGGGGGG.",
+        "..GGGwG..",
+        ".GGGGGGG.",
+        "GGGwGGGGG",
+        "....B....",
+        "....B....",
+    ],
+};

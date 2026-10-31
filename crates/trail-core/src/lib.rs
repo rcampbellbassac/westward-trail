@@ -25,6 +25,7 @@ mod icons;
 mod net;
 mod party;
 mod pictures;
+mod races;
 mod raft;
 mod river;
 mod save;
@@ -228,6 +229,8 @@ pub(crate) enum Scene {
     Fish(Box<fish::FishState>),
     Forage(Box<forage::ForageState>),
     Raft(Box<raft::RaftState>),
+    Games(races::From),
+    Race(Box<races::RaceState>),
     Score(Vec<(String, u32)>),
     GameOver,
     Terminal(Box<terminal::TermState>),
@@ -478,7 +481,7 @@ impl Game {
     fn in_action_game(&self) -> bool {
         matches!(
             self.scene,
-            Scene::Hunt(_) | Scene::Fish(_) | Scene::Raft(_) | Scene::Forage(_)
+            Scene::Hunt(_) | Scene::Fish(_) | Scene::Raft(_) | Scene::Forage(_) | Scene::Race(_)
         )
     }
 
@@ -548,6 +551,8 @@ impl Game {
             Scene::Fish(s) => fish::key(self, s, k),
             Scene::Forage(s) => forage::key(self, s, k),
             Scene::Raft(r) => Scene::Raft(r),
+            Scene::Games(from) => races::games_key(self, from, k),
+            Scene::Race(r) => races::key(self, r, k),
             Scene::Score(lines) => score::after_score(self, &lines),
             Scene::GameOver => score::after_game_over(self),
             Scene::Terminal(t) => terminal::key(self, t, k),
@@ -564,6 +569,7 @@ impl Game {
             Scene::Fish(s) => fish::tick(self, s, ms),
             Scene::Forage(s) => forage::tick(self, s, ms),
             Scene::Raft(r) => raft::tick(self, r, ms),
+            Scene::Race(r) => races::tick(self, r, ms),
             other => other,
         }
     }
@@ -593,6 +599,8 @@ impl Game {
             Scene::Fish(s) => fish::render(self, f, s),
             Scene::Forage(s) => forage::render(self, f, s),
             Scene::Raft(r) => raft::render(self, f, r),
+            Scene::Games(from) => races::render_games(self, f, *from),
+            Scene::Race(r) => races::render(self, f, r),
             Scene::Score(lines) => score::render_score(self, f, lines),
             Scene::GameOver => score::render_game_over(self, f),
             Scene::Terminal(_) => {}

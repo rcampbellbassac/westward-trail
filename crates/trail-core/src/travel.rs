@@ -778,6 +778,7 @@ pub fn render_sizeup(g: &Game, f: &mut Frame) {
         items.push(String::from("F. Go fishing"));
     }
     items.push(String::from("G. Gather food"));
+    items.push(String::from("P. Play a game"));
     if g.net.racing && g.net.settings.mode.own_wagons() {
         items.push(String::from(
             if g.net.settings.mode == crate::net::Mode::Train {
@@ -826,6 +827,7 @@ pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
             return Scene::Fish(alloc::boxed::Box::default());
         }
         Key::Char('g' | 'G') => return crate::forage::start(g),
+        Key::Char('p' | 'P') => return Scene::Games(crate::races::From::Trail),
         Key::Char('r' | 'R') if g.net.racing && g.net.settings.mode.own_wagons() => {
             return Scene::Online(crate::net::Screen::Standings { last: false });
         }

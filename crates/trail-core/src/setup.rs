@@ -50,6 +50,7 @@ pub fn render_title(g: &Game, f: &mut Frame) {
             "See the Top Ten",
             "Load a saved trip",
             "Play together",
+            "Fun and games",
         ],
     );
     f.text(3, 126, "v0.1", gfx::rgb(60, 100, 40), Font::Small);
@@ -115,6 +116,7 @@ pub fn title_key(g: &mut Game, k: Key) -> Scene {
         Some(3) => Scene::TopTen,
         Some(4) => crate::save::open(crate::save::SlotMode::Load),
         Some(5) => crate::net::open(g),
+        Some(6) => Scene::Games(crate::races::From::Title),
         _ => Scene::Title,
     }
 }
