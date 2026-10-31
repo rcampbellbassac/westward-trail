@@ -52,7 +52,7 @@ pub const MESSAGES: [&str; 8] = [
 ];
 
 /// Colors for players' wagons on the map, in roster order.
-const COLORS: [Color; MAX_PLAYERS] = [
+pub(crate) const COLORS: [Color; MAX_PLAYERS] = [
     gfx::RED,
     gfx::BLUE,
     gfx::rgb(240, 200, 0),
@@ -70,15 +70,17 @@ pub enum Mode {
     Democracy,
     Shared,
     Hunt,
+    Races,
 }
 
 impl Mode {
-    const ALL: [Mode; 5] = [
+    const ALL: [Mode; 6] = [
         Mode::Race,
         Mode::Train,
         Mode::Democracy,
         Mode::Shared,
         Mode::Hunt,
+        Mode::Races,
     ];
 
     fn name(self) -> &'static str {
@@ -88,6 +90,15 @@ impl Mode {
             Mode::Democracy => "Democracy",
             Mode::Shared => "One wagon, many drivers",
             Mode::Hunt => "Hunt together",
+            Mode::Races => "Fun races",
+        }
+    }
+
+    /// How many can play: the fun races have four racers.
+    pub fn max_players(self) -> usize {
+        match self {
+            Mode::Races => 4,
+            _ => MAX_PLAYERS,
         }
     }
 
@@ -118,6 +129,9 @@ impl Mode {
             Mode::Hunt => {
                 "Everyone hunts in the same field at once. Who brings back the most meat?"
             }
+            Mode::Races => {
+                "Wagon, foot and sled races for up to 4 players. Computer racers fill the empty spots."
+            }
         }
     }
 
@@ -128,6 +142,7 @@ impl Mode {
             Mode::Democracy => "vote",
             Mode::Shared => "shared",
             Mode::Hunt => "hunt",
+            Mode::Races => "races",
         }
     }
 
@@ -300,7 +315,7 @@ impl Net {
         self.racing && !self.settings.cheats
     }
 
-    fn me_peer(&self) -> Peer {
+    pub(crate) fn me_peer(&self) -> Peer {
         Peer {
             id: self.me,
             name: self.name.clone(),
@@ -417,7 +432,9 @@ pub fn receive(g: &mut Game, text: &str) {
     }
     match kind {
         "join" if g.net.hosting() && !g.net.racing => {
-            if !g.net.players.iter().any(|p| p.id == id) && g.net.players.len() < MAX_PLAYERS {
+            if !g.net.players.iter().any(|p| p.id == id)
+                && g.net.players.len() < g.net.settings.mode.max_players()
+            {
                 let mut p = g.net.me_peer();
                 p.id = id;
                 p.name = tail(&w, 3);
@@ -656,10 +673,13 @@ fn begin(g: &mut Game, seed: u32) -> Scene {
             "Democracy",
             "You all share one wagon, and every big choice is a vote: everyone presses their pick. Most votes wins, and the leader breaks ties. The leader types names and shops.",
         ),
-        Mode::Hunt => {}
+        Mode::Hunt | Mode::Races => {}
     }
     if s.mode.one_party() {
         crate::party::begin_host(g);
+    }
+    if s.mode == Mode::Races {
+        return Scene::Games(crate::races::From::Together);
     }
     if s.mode == Mode::Hunt {
         return hunt_round(g);
@@ -1220,7 +1240,7 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                         l.name,
                         l.mode.name(),
                         l.players,
-                        MAX_PLAYERS
+                        l.mode.max_players()
                     ),
                     gfx::YELLOW,
                     Font::Normal,
@@ -1292,8 +1312,9 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
             }
             let footer = if n.hosting() {
                 format!(
-                    "ENTER: start ({}/{MAX_PLAYERS})  ESC: close",
-                    n.players.len()
+                    "ENTER: start ({}/{})  ESC: close",
+                    n.players.len(),
+                    st.mode.max_players()
                 )
             } else {
                 String::from("Waiting for the host to start. ESC: leave")

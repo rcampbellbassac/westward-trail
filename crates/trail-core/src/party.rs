@@ -61,6 +61,8 @@ pub struct Party {
     // Watchers: keys held and shots fired by each player, for the hunt.
     held: Vec<(u32, Held)>,
     pub(crate) shots: Vec<u32>,
+    /// Keys pressed by each player, for the fun races.
+    pub(crate) presses: Vec<(u32, Key)>,
     // Watching: the host's screen.
     screen: stream::Screen,
     seen: u32,
@@ -177,6 +179,8 @@ enum Rule {
     Vote,
     /// It moves that player's own hunter.
     Hunter,
+    /// It's for that player's own racer.
+    Racer,
     Ignore,
 }
 
@@ -187,6 +191,12 @@ fn rule(g: &Game, id: u32) -> Rule {
         && g.msgs.is_empty()
     {
         return Rule::Hunter;
+    }
+    if let Scene::Race(r) = &g.scene
+        && r.together()
+        && g.msgs.is_empty()
+    {
+        return Rule::Racer;
     }
     match g.net.settings.mode {
         Mode::Shared if id == g.net.party.driver => Rule::Apply,
@@ -221,7 +231,7 @@ pub fn local_key(g: &mut Game, k: Key, down: bool) -> bool {
     }
     let me = g.net.me;
     match rule(g, me) {
-        Rule::Apply | Rule::Hunter => false,
+        Rule::Apply | Rule::Hunter | Rule::Racer => false,
         Rule::Vote => {
             if down {
                 vote(g, me, k);
@@ -256,6 +266,20 @@ pub fn remote_key(g: &mut Game, id: u32, down: bool, k: Key) {
             crate::set_held(&mut p.held[i].1, k, down);
             if down && matches!(k, Key::Char(' ') | Key::Enter) {
                 p.shots.push(id);
+            }
+        }
+        Rule::Racer => {
+            let p = &mut g.net.party;
+            let i = match p.held.iter().position(|(i, _)| *i == id) {
+                Some(i) => i,
+                None => {
+                    p.held.push((id, Held::default()));
+                    p.held.len() - 1
+                }
+            };
+            crate::set_held(&mut p.held[i].1, k, down);
+            if down && p.presses.len() < 64 {
+                p.presses.push((id, k));
             }
         }
         Rule::Apply if down => g.press(k),
@@ -454,6 +478,7 @@ pub fn begin_host(g: &mut Game) {
     p.driver_in = 0;
     p.held.clear();
     p.shots.clear();
+    p.presses.clear();
     p.tx.get_mut().refresh();
 }
 

@@ -16,6 +16,7 @@ single-player game stays exactly as it is.
 | 7. One wagon, many drivers | **Done.** Played in two browsers. |
 | 8. Hunt together | **Done**, as its own game and inside the one-wagon games. Played in two browsers. |
 | 9. The standalone relay for other families | Not started. |
+| Fun races (wagon, foot and sled races, up to 4 players) | **Done.** Raced in two browsers. |
 
 ### Try it
 
@@ -44,6 +45,7 @@ single-player game stays exactly as it is.
 | 3 | **Hunt together** | Several hunters in the same field in real time, sharing the meat. |
 | 4 | **One wagon, many drivers** | Players take turns making the choices for one shared party. |
 | 5 | **Democracy** | Everyone is one member of the same party, and the party votes on every choice. |
+| 6 | **Fun races** | The wagon, foot and sled races from "Fun and games", up to 4 players. Computer racers fill the empty spots. |
 
 ### Democracy rules
 
@@ -98,6 +100,9 @@ host sends its **screen** to everyone else as text lines, and they send their **
     presses ENTER. On a tie the leader's vote wins. The leader types names and shops, and anyone can turn the page
     of a message. A player whose party member is gone is a ghost and can't vote.
   - **Hunting:** everyone has their own hunter, in their own color with their initial over it.
+  - **Fun races:** everyone has their own racer in their own color. The host picks the race. The screen
+    follows the middle of the players, and anyone more than a screen behind is pulled along to its edge, so
+    nobody gets lost off the shared screen.
 - The party members are the players, in the order they joined (the host leads).
 - A watcher presses ` (backtick) for their own menu: send a message or leave.
 - Lines are now up to 2048 characters (the relay and the Cardputer were raised from 512).

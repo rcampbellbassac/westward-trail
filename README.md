@@ -23,7 +23,10 @@ project isn't affiliated with them. The code, text and pixel art here are origin
   (younger pioneers get a hint, then a warning; in classic mode the deadliest are rarely fatal)
 - **Races, just for fun** (title screen: 6. Fun and games; on the trail: P): a **wagon race** (tap SPACE to hurry
   the oxen, at a stately 3 mph, and change lanes around rocks, bumps and trees), a **foot race** (jump the logs and
-  rocks), and a **sled race** down a snowy hill when there's snow about. Nothing on the trip changes: `races.rs`.
+  rocks), and a **sled race** down a snowy hill when there's snow about. Four racers line up: alone, you race
+  three computer racers (easy, fair and good, and they dodge and jump, but they're beatable). Playing together,
+  **Fun races** lets up to 4 players race, with computer racers in any empty spots. Nothing on the trip changes:
+  `races.rs`.
 - **Five save slots** (title screen: load; on the trail: S). Browser storage on the web; on the Cardputer,
   internal flash plus `WESTWARD/SAVE1.TXT`..`SAVE5.TXT` on the SD card (the newest copy wins at start-up; an edited save
   keeps its `saved = N` number, so a tie goes to the card and edits on a computer load)
