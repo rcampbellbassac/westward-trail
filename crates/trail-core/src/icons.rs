@@ -589,15 +589,15 @@ pub static PICKS: &[(&[&str], &Sprite)] = &[
     (&["trade"], &SWAP),
     (&["talk", "message"], &SPEECH),
     (&["buy"], &MONEY),
-    (&["check supplies"], &CRATE),
+    (&["check supplies", "supplies"], &CRATE),
     (&["map"], &MAP),
     (&["save", "saved"], &CHEST),
     (&["top ten"], &TROPHY),
-    (&["fun and games", "play a game"], &BALL),
+    (&["fun and games", "play a game", "games"], &BALL),
     (&["foot race"], &RUNNER),
     (&["sled"], &SLED),
     (&["wagon race"], &WAGON),
-    (&["race"], &FLAG),
+    (&["race", "standings"], &FLAG),
     (&["democracy", "vote"], &BALLOT),
     (&["back to"], &BACK),
     (&["leave the game"], &CROSS),
@@ -605,10 +605,17 @@ pub static PICKS: &[(&[&str], &Sprite)] = &[
     (&["help"], &HELP),
     (&["luck", "woo", "cheats"], &STAR),
     (
-        &["learn", "information", "advice", "differences", "size up"],
+        &[
+            "learn",
+            "information",
+            "advice",
+            "different",
+            "differences",
+            "size up",
+        ],
         &QUESTION,
     ),
-    (&["travel", "continue", "wagon"], &WAGON),
+    (&["travel", "continue", "wagon", "train"], &WAGON),
 ];
 
 /// The picture for a menu line's text (without its "1. "), if any word in it has one.

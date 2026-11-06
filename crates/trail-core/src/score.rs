@@ -4,7 +4,7 @@ use alloc::{format, string::String, vec::Vec};
 
 use crate::{
     Game, Mood, Pic, Scene, ScoreEntry,
-    gfx::{self, Font, Frame},
+    gfx::{self, Font, Frame, W},
     pictures, ui,
 };
 
@@ -148,30 +148,32 @@ fn occupation_short(g: &Game) -> String {
 }
 
 pub fn render_score(g: &Game, f: &mut Frame, lines: &[(String, u32)]) {
-    ui::header(f, "Points for arriving in Oregon");
-    let mut y = 15;
+    ui::header(f, "Your points");
+    // Small letters: the list of points can be long.
+    let mut y = ui::HEAD_H + 2;
     for (label, pts) in lines {
         let total = label == "TOTAL";
-        let c = if total { gfx::YELLOW } else { gfx::WHITE };
-        f.text(3, y, label, c, Font::Normal);
+        let (c, font) = if total {
+            (gfx::YELLOW, Font::Normal)
+        } else {
+            (gfx::WHITE, Font::Small)
+        };
+        let label: String = label.chars().take(22).collect();
+        f.text(3, y, &label, c, font);
         if *pts > 0 || total {
-            f.text(196, y, &format!("{pts:>6}"), c, Font::Normal);
+            let n = format!("{pts}");
+            let x = W - 3 - n.len() as i32 * font.char_w();
+            f.text(x, y, &n, c, font);
         }
-        y += 10;
+        y += font.line_h();
     }
     if let Some((_, total)) = lines.last() {
-        f.text(
-            3,
-            y + 2,
-            &format!("Rating: {}", rating(*total)),
-            gfx::GREEN,
-            Font::Normal,
-        );
+        f.text(3, y + 2, rating(*total), gfx::GREEN, Font::Normal);
     }
     if g.cheats.used {
-        f.text(150, y + 2, "HACKER MODE", gfx::GREEN, Font::Small);
+        f.text(140, y + 4, "HACKER MODE", gfx::GREEN, Font::Small);
     }
-    ui::footer(f, "Press any key to see the Top Ten.");
+    ui::footer(f, "Any key: the Top Ten");
 }
 
 pub fn after_score(g: &mut Game, lines: &[(String, u32)]) -> Scene {
@@ -198,28 +200,45 @@ pub fn after_game_over(g: &mut Game) -> Scene {
     Scene::Title
 }
 
-pub fn render_top_ten(g: &Game, f: &mut Frame) {
-    ui::header(f, "The Westward Top Ten");
-    let mut y = 15;
-    for (i, e) in g.top.iter().enumerate() {
+/// The Top Ten, five at a time: `more` shows 6 to 10.
+pub fn render_top_ten(g: &Game, f: &mut Frame, more: bool) {
+    ui::header(
+        f,
+        if more {
+            "Top Ten: 6 to 10"
+        } else {
+            "The Top Ten"
+        },
+    );
+    let mut y = ui::TOP;
+    let skip = if more { 5 } else { 0 };
+    for (i, e) in g.top.iter().enumerate().skip(skip).take(5) {
+        let name: String = e.name.chars().take(14).collect();
         f.text(
             3,
             y,
-            &format!("{:>2}. {}", i + 1, e.name),
+            &format!("{:>2}. {}", i + 1, name),
             gfx::WHITE,
             Font::Normal,
         );
+        let pts = format!("{}", e.points);
         f.text(
-            150,
+            W - 3 - pts.len() as i32 * 10,
             y,
-            &format!("{:>5}", e.points),
+            &pts,
             gfx::YELLOW,
             Font::Normal,
         );
-        f.text(186, y, rating(e.points), gfx::GRAY, Font::Small);
-        y += 10;
+        y += 19;
     }
-    ui::footer(f, "Press any key.");
+    ui::footer(
+        f,
+        if more {
+            "Any key: done"
+        } else {
+            "Any key: 6 to 10"
+        },
+    );
 }
 
 pub fn game_over(g: &mut Game) -> Scene {
@@ -241,17 +260,13 @@ pub fn game_over(g: &mut Game) -> Scene {
 pub fn render_game_over(g: &Game, f: &mut Frame) {
     ui::header(f, "Game over");
     if g.t.mood == Mood::Gentle {
-        pictures::backdrop(f, crate::data::Terrain::Plains, 12, 70, 0, gfx::SKY);
-        pictures::team(f, 100, 50, 0);
+        pictures::backdrop(f, crate::data::Terrain::Plains, ui::HEAD_H, 66, 0, gfx::SKY);
+        pictures::team(f, 100, 56, 0);
     } else {
         let leader = g.t.party.first().map_or("", |p| p.name.as_str());
-        pictures::tomb(f, leader, 12, 70);
+        pictures::tomb(f, leader, ui::HEAD_H, 66);
     }
-    f.text_center(
-        92,
-        "Try again? The trail is waiting.",
-        gfx::WHITE,
-        Font::Normal,
-    );
+    f.text_center(88, "Try again? The", gfx::WHITE, Font::Normal);
+    f.text_center(104, "trail is waiting.", gfx::WHITE, Font::Normal);
     ui::footer(f, "Press any key.");
 }

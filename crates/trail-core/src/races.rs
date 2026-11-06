@@ -313,33 +313,21 @@ pub fn render_games(g: &Game, f: &mut Frame, from: From) {
         },
     );
     let names: Vec<&str> = games(g, from).iter().map(|k| k.name()).collect();
-    let mut y = ui::menu(f, 3, 18, &names) + 4;
+    let y = ui::menu(f, 3, ui::TOP, &names) + 2;
     let about = if together {
-        format!(
-            "Up to {RACERS} racers. Computer racers fill the empty spots. {} picks the race.",
-            g.net.name
-        )
+        format!("Up to {RACERS} racers. {} picks.", g.net.name)
     } else {
-        String::from("Race three computer racers, just for fun! Nothing on your trip changes.")
+        String::from("Just for fun! Nothing on your trip changes.")
     };
-    y = ui::para(f, 3, y, &about, gfx::GRAY);
-    if from == From::Trail && !snowy(g) {
-        ui::para(
-            f,
-            3,
-            y,
-            "Sledding needs snow. Look for it in the mountains!",
-            gfx::GRAY,
-        );
-    }
+    ui::para(f, 3, y, &about, gfx::GRAY);
     // Racers going by along the bottom.
     let x = W - ((g.clock / 50) as i32 % (W + 60));
     f.rect(0, 108, W, 14, gfx::rgb(90, 150, 60));
-    pictures::team(f, x, 96, (g.clock / 250) as usize);
+    pictures::team(f, x, 98, (g.clock / 250) as usize);
     let rx = (g.clock / 25) as i32 % (W + 40) - 20;
     f.sprite_accent(
         rx,
-        99,
+        101,
         &sprites::RUNNER[(g.clock / 150) as usize % 2],
         false,
         gfx::BLUE,
@@ -347,9 +335,11 @@ pub fn render_games(g: &Game, f: &mut Frame, from: From) {
     ui::footer(
         f,
         if together {
-            "Pick a race, or ESC to finish."
+            "Pick a race. ESC: finish"
+        } else if from == From::Trail && !snowy(g) {
+            "Sleds need snow! ESC: back"
         } else {
-            "Pick a game, or ESC to go back."
+            "Pick a game. ESC: back"
         },
     );
 }
@@ -378,7 +368,7 @@ pub fn games_key(g: &mut Game, from: From, k: Key) -> Scene {
 }
 
 impl RaceState {
-    fn new(g: &Game, kind: Kind, from: From) -> Self {
+    pub(crate) fn new(g: &Game, kind: Kind, from: From) -> Self {
         let mut rng = Rng::new(g.rng.state() ^ (u64::from(g.clock) << 20) ^ kind as u64);
         let mut r = Vec::new();
         if from == From::Together {
@@ -1001,6 +991,7 @@ fn ink(c: Color) -> Color {
 }
 
 fn name_tag(f: &mut Frame, x: i32, y: i32, r: &Racer) {
+    let y = y.min(H - Font::Small.line_h());
     f.label(x, y, &r.name, ink(r.color), r.color, Font::Small);
 }
 
@@ -1014,28 +1005,25 @@ pub fn render(g: &Game, f: &mut Frame, s: &RaceState) {
     if s.clock < START + 700 {
         let n = s.clock * 3 / START;
         let word = ["3", "2", "1", "GO!"][n.min(3) as usize];
-        let w = word.len() as i32 * 10;
-        f.label((W - w) / 2, 22, word, gfx::YELLOW, gfx::BLACK, Font::Big);
+        let w = word.len() as i32 * Font::Big.char_w();
+        f.label((W - w) / 2, 31, word, gfx::YELLOW, gfx::BLACK, Font::Big);
     }
     if s.clock < START + 2500 && s.cheer.is_none() {
         let hint = match s.kind {
-            Kind::Wagon => "SPACE: hurry the oxen!  UP/DOWN: lane",
-            Kind::Foot => "SPACE: jump over logs and rocks!",
-            Kind::Sled => "LEFT/RIGHT: steer  hold SPACE: faster",
+            Kind::Wagon => "SPACE: hurry. UP/DOWN: lane",
+            Kind::Foot => "SPACE: jump!",
+            Kind::Sled => "LEFT/RIGHT steer. SPACE: go",
         };
-        let w = hint.len() as i32 * 5;
-        f.label(
-            (W - w) / 2,
-            H - 10,
-            hint,
-            gfx::WHITE,
-            gfx::BLACK,
-            Font::Small,
-        );
+        // Runners use the bottom of the screen, so their hint goes at the top.
+        let y = if s.kind == Kind::Foot {
+            TOP + 1
+        } else {
+            H - 17
+        };
+        f.banner(y, hint, gfx::WHITE, gfx::BLACK);
     }
     if let Some((msg, _)) = &s.flash {
-        let w = msg.len() as i32 * 6;
-        f.label((W - w) / 2, 15, msg, gfx::YELLOW, gfx::BLACK, Font::Normal);
+        f.banner(TOP + 3, msg, gfx::YELLOW, gfx::BLACK);
     }
     if let Some(t) = s.cheer {
         render_cheer(f, s, t);
@@ -1051,22 +1039,28 @@ fn render_cheer(f: &mut Frame, s: &RaceState, t: u32) {
         let word = ["You win!", "2nd place!", "3rd place!", "4th place"][place];
         (String::from(word), gfx::YELLOW)
     };
-    let w = word.len() as i32 * 10;
-    f.label((W - w) / 2, 18, &word, c, gfx::BLACK, Font::Big);
+    let font = if word.chars().count() as i32 * Font::Big.char_w() <= W - 4 {
+        Font::Big
+    } else {
+        Font::Normal
+    };
+    let w = word.chars().count() as i32 * font.char_w();
+    f.label((W - w) / 2, 16, &word, c, gfx::BLACK, font);
     if t < CHEER_MS {
         return;
     }
     if s.together() {
         // Everyone's place, on the shared screen ("1st", not "1.", which would
         // look like a menu choice).
-        f.rect(60, 42, 120, 12 + s.places.len() as i32 * 11, gfx::BLACK);
-        f.outline(60, 42, 120, 12 + s.places.len() as i32 * 11, gfx::GRAY);
+        let h = 6 + s.places.len() as i32 * 16;
+        f.rect(28, 42, 184, h, gfx::BLACK);
+        f.outline(28, 42, 184, h, gfx::GRAY);
         for (n, &i) in s.places.iter().enumerate() {
             let r = &s.r[i];
-            let y = 48 + n as i32 * 11;
-            f.rect(66, y + 1, 6, 6, r.color);
+            let y = 45 + n as i32 * 16;
+            f.rect(34, y + 3, 8, 8, r.color);
             f.text(
-                76,
+                46,
                 y,
                 &format!("{} {}", ["1st", "2nd", "3rd", "4th"][n], r.name),
                 gfx::WHITE,
@@ -1079,15 +1073,7 @@ fn render_cheer(f: &mut Frame, s: &RaceState, t: u32) {
     } else {
         "Press ENTER"
     };
-    let w = go_on.len() as i32 * 6;
-    f.label(
-        (W - w) / 2,
-        H - 11,
-        go_on,
-        gfx::WHITE,
-        gfx::BLACK,
-        Font::Normal,
-    );
+    f.banner(H - 17, go_on, gfx::WHITE, gfx::BLACK);
 }
 
 /// The top bar: a little track from start to finish with every racer on it.
@@ -1100,7 +1086,7 @@ fn hud(f: &mut Frame, s: &RaceState) {
         let t = s.r[0].done.unwrap_or(s.clock.saturating_sub(START));
         format!("{}s", t / 1000)
     };
-    f.text(3, 2, &left, gfx::WHITE, Font::Small);
+    f.text(3, 0, &left, gfx::WHITE, Font::Small);
     let (x0, x1, len) = (52, 226, s.kind.len());
     f.rect(x0, 6, x1 - x0, 1, gfx::GRAY);
     checkers(f, x1, 2, 6, 8);

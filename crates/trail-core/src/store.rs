@@ -5,8 +5,8 @@ use alloc::{format, string::String};
 use crate::{
     Game, Key, Pic, Scene,
     data::Kind,
-    gfx::{self, Font, Frame},
-    ui,
+    gfx::{self, Font, Frame, W},
+    ui::{self, FOOTER_Y as FOOT_Y},
 };
 
 pub struct StoreState {
@@ -57,7 +57,7 @@ fn unit(item: usize) -> &'static str {
         0 => "yoke (2 oxen)",
         1 => "pound",
         2 => "set",
-        3 => "box (20 bullets)",
+        3 => "box of 20",
         _ => "part",
     }
 }
@@ -69,19 +69,19 @@ fn owned(g: &Game, item: usize) -> String {
         1 => format!("{} lbs", s.food),
         2 => format!("{} sets", s.clothing),
         3 => format!("{} bullets", s.ammo),
-        4 => format!("{}", s.wheels),
-        5 => format!("{}", s.axles),
-        _ => format!("{}", s.tongues),
+        4 => format!("{} spare", s.wheels),
+        5 => format!("{} spare", s.axles),
+        _ => format!("{} spare", s.tongues),
     }
 }
 
 fn advice(item: usize) -> &'static str {
     match item {
-        0 => "There are 2 oxen in a yoke. I recommend at least 3 yoke.",
-        1 => "I recommend at least 200 pounds of food for each person.",
-        2 => "Take at least 2 sets of clothing per person for the cold mountains.",
+        0 => "Get at least 3 yoke.",
+        1 => "Get at least 200 pounds for each person.",
+        2 => "Get at least 2 sets for each person, for the cold mountains.",
         3 => "Each box holds 20 bullets for hunting.",
-        _ => "A spare part can save you days if something breaks.",
+        _ => "A spare can save you days if something breaks.",
     }
 }
 
@@ -101,7 +101,8 @@ pub fn render(g: &Game, f: &mut Frame, s: &StoreState) {
     ui::header(f, &store_name(g, s));
     match s.sel {
         None => {
-            let mut y = 15;
+            // Rows a little closer than usual, so all seven and the cash fit.
+            let mut y = ui::HEAD_H + 2;
             for (i, name) in ITEMS.iter().enumerate() {
                 f.text(
                     3,
@@ -110,48 +111,59 @@ pub fn render(g: &Game, f: &mut Frame, s: &StoreState) {
                     gfx::WHITE,
                     Font::Normal,
                 );
-                f.text(108, y, &owned(g, i), gfx::GRAY, Font::Normal);
-                f.text(186, y, &ui::money(price(g, i)), gfx::YELLOW, Font::Normal);
-                y += 10;
+                let p = ui::money(price(g, i));
+                f.text(
+                    W - 3 - p.len() as i32 * 10,
+                    y,
+                    &p,
+                    gfx::YELLOW,
+                    Font::Normal,
+                );
+                y += 14;
             }
             f.text(
                 3,
-                y + 4,
-                &format!("Cash: {}", ui::money(g.t.sup.cash)),
+                FOOT_Y,
+                &format!("Cash {}", ui::money(g.t.sup.cash)),
                 gfx::GREEN,
-                Font::Normal,
+                Font::Small,
             );
-            ui::footer(f, "Number to buy.  ENTER when you're done.");
+            f.text(128, FOOT_Y, "ENTER: done", gfx::GRAY, Font::Small);
         }
         Some(i) => {
-            f.text(3, 16, ITEMS[i], gfx::YELLOW, Font::Bold);
-            let mut y = ui::para(f, 3, 32, advice(i), gfx::GRAY);
+            f.text(3, ui::TOP, ITEMS[i], gfx::YELLOW, Font::Normal);
             let p = price(g, i);
-            f.text(
-                3,
-                y + 2,
-                &format!("{} per {}", ui::money(p), unit(i)),
-                gfx::WHITE,
-                Font::Normal,
-            );
-            y += 12;
-            let afford = g.t.sup.cash.checked_div(p).unwrap_or(9999);
+            let mut y = ui::TOP + ui::LINE;
             f.text(
                 3,
                 y,
-                &format!("You have {}, can afford {afford}", owned(g, i)),
+                &format!("{} a {}", ui::money(p), unit(i)),
+                gfx::WHITE,
+                Font::Normal,
+            );
+            y += ui::LINE;
+            let lines = gfx::wrap(advice(i), ui::FOOT_COLS);
+            for line in lines.iter().take(2) {
+                f.text(3, y, line, gfx::GRAY, Font::Small);
+                y += 13;
+            }
+            y += 2;
+            f.text(
+                3,
+                y,
+                &format!("You have {}", owned(g, i)),
                 gfx::WHITE,
                 Font::Normal,
             );
             let cursor = if (g.clock / 400) % 2 == 0 { "_" } else { " " };
             f.text(
                 3,
-                y + 16,
+                y + ui::LINE,
                 &format!("How many? {}{cursor}", s.buf),
                 gfx::YELLOW,
                 Font::Normal,
             );
-            ui::footer(f, "Type a number and ENTER.  ESC: go back.");
+            ui::footer(f, "Number, ENTER.  ESC: back");
         }
     }
 }
@@ -233,6 +245,8 @@ fn buy(g: &mut Game, item: usize, qty: u32) {
         _ => sup.tongues += qty,
     }
     g.tune(&[(784, 40), (1047, 60)]);
+    let have = format!("You have {}", owned(g, item));
+    g.notify(have);
 }
 
 fn leave(g: &mut Game, s: StoreState) -> Scene {

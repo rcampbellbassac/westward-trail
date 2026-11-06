@@ -296,21 +296,21 @@ dependencies = [
 
 [[package]]
 name = "trail-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-graphics",
 ]
 
 [[package]]
 name = "trail-relay"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "tungstenite",
 ]
 
 [[package]]
 name = "trail-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "trail-core",
 ]

@@ -5,7 +5,7 @@ use alloc::{string::String, vec, vec::Vec};
 use embedded_graphics::{
     mono_font::{
         MonoFont, MonoTextStyle,
-        ascii::{FONT_5X8, FONT_6X10, FONT_6X13_BOLD, FONT_10X20},
+        ascii::{FONT_5X8, FONT_8X13_BOLD},
     },
     pixelcolor::{Rgb565, raw::RawU16},
     prelude::*,
@@ -122,30 +122,83 @@ fn key_marks(s: &str) -> Vec<(usize, usize, Color)> {
     marks
 }
 
+/// Text sizes. The Cardputer's screen is tiny (1.14"), so the main text is the 5x8 font drawn
+/// at double size: thick 2-pixel strokes, 24 letters by 8 lines on a screen.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Font {
+    /// Footers and the busy corners of action games: 8x13 bold, 30 letters across.
     Small,
+    /// Nearly everything: 5x8 at double size, 10x16.
     Normal,
+    /// Same size as Normal (kept for the few places that asked for bold).
     Bold,
+    /// Titles: 5x8 at triple size, 15x24.
     Big,
 }
 
 impl Font {
     fn mono(self) -> &'static MonoFont<'static> {
         match self {
-            Font::Small => &FONT_5X8,
-            Font::Normal => &FONT_6X10,
-            Font::Bold => &FONT_6X13_BOLD,
-            Font::Big => &FONT_10X20,
+            Font::Small => &FONT_8X13_BOLD,
+            _ => &FONT_5X8,
+        }
+    }
+
+    /// How many screen pixels each font pixel becomes.
+    fn scale(self) -> i32 {
+        match self {
+            Font::Small => 1,
+            Font::Normal | Font::Bold => 2,
+            Font::Big => 3,
+        }
+    }
+
+    /// The biggest of Normal and Small that fits `s` in `max_w` pixels.
+    pub fn fit(s: &str, max_w: i32) -> Font {
+        if s.chars().count() as i32 * Font::Normal.char_w() <= max_w {
+            Font::Normal
+        } else {
+            Font::Small
         }
     }
 
     pub fn char_w(self) -> i32 {
-        self.mono().character_size.width as i32
+        self.mono().character_size.width as i32 * self.scale()
     }
 
     pub fn line_h(self) -> i32 {
-        self.mono().character_size.height as i32
+        self.mono().character_size.height as i32 * self.scale()
+    }
+}
+
+/// Draws a font's pixels as `s` x `s` blocks, growing away from (ox, oy).
+struct Scaled<'a> {
+    f: &'a mut Frame,
+    ox: i32,
+    oy: i32,
+    s: i32,
+}
+
+impl DrawTarget for Scaled<'_> {
+    type Color = Color;
+    type Error = core::convert::Infallible;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        for Pixel(p, c) in pixels {
+            let x = self.ox + (p.x - self.ox) * self.s;
+            let y = self.oy + (p.y - self.oy) * self.s;
+            self.f.rect(x, y, self.s, self.s, c);
+        }
+        Ok(())
+    }
+}
+
+impl OriginDimensions for Scaled<'_> {
+    fn size(&self) -> Size {
+        Size::new(W as u32 * 3, H as u32 * 3)
     }
 }
 
@@ -187,7 +240,7 @@ impl Frame {
 
     pub fn rect(&mut self, x: i32, y: i32, w: i32, h: i32, c: Color) {
         let raw = RawU16::from(c).into_inner();
-        let (x0, y0) = (x.max(0), y.max(0));
+        let (x0, y0) = (x.clamp(0, W), y.max(0));
         let (x1, y1) = ((x + w).min(W), (y + h).min(H));
         for yy in y0..y1 {
             let row = (yy * W) as usize;
@@ -207,9 +260,11 @@ impl Frame {
     /// and a menu line gets its picture in place of the ". " after the key.
     pub fn text(&mut self, x: i32, y: i32, s: &str, c: Color, font: Font) -> i32 {
         let cw = font.char_w();
+        #[cfg(test)]
+        overflow::check(x, y, s, font);
         let chars: Vec<char> = s.chars().collect();
         let picture = menu_line(&chars)
-            .filter(|_| cw == 6)
+            .filter(|_| matches!(font, Font::Normal | Font::Bold))
             .and_then(|(start, _)| {
                 let label: String = chars[start + 2..].iter().collect();
                 crate::icons::for_label(label.trim()).map(|p| (start, p))
@@ -219,7 +274,12 @@ impl Frame {
             plain[start + 1] = ' ';
             let plain: String = plain.into_iter().collect();
             self.text_caps(x, y, &plain, key_marks(s), c, font);
-            self.sprite(x + (start as i32 + 1) * cw + 1, y, p, false);
+            self.sprite(
+                x + (start as i32 + 1) * cw + 5,
+                y + (font.line_h() - p.h()) / 2,
+                p,
+                false,
+            );
             return chars.len() as i32 * cw;
         }
         self.text_caps(x, y, s, key_marks(s), c, font)
@@ -244,20 +304,43 @@ impl Frame {
                 cap,
             );
         }
-        let style = MonoTextStyle::new(font.mono(), c);
-        let _ = Text::with_baseline(s, Point::new(x, y), style, Baseline::Top).draw(self);
-        let ink = MonoTextStyle::new(font.mono(), BLACK);
+        self.glyphs(x, y, s, c, font);
         for &(i, n, _) in &marks {
             let part: String = s.chars().skip(i).take(n).collect();
-            let at = Point::new(x + i as i32 * cw, y);
-            let _ = Text::with_baseline(&part, at, ink, Baseline::Top).draw(self);
+            self.glyphs(x + i as i32 * cw, y, &part, BLACK, font);
         }
         s.chars().count() as i32 * cw
+    }
+
+    fn glyphs(&mut self, x: i32, y: i32, s: &str, c: Color, font: Font) {
+        let style = MonoTextStyle::new(font.mono(), c);
+        let at = Point::new(x, y);
+        let text = Text::with_baseline(s, at, style, Baseline::Top);
+        match font.scale() {
+            1 => {
+                let _ = text.draw(self);
+            }
+            sc => {
+                let _ = text.draw(&mut Scaled {
+                    f: self,
+                    ox: x,
+                    oy: y,
+                    s: sc,
+                });
+            }
+        }
     }
 
     pub fn text_center(&mut self, y: i32, s: &str, c: Color, font: Font) {
         let w = s.chars().count() as i32 * font.char_w();
         self.text((W - w) / 2, y, s, c, font);
+    }
+
+    /// A centered note with a background bar, in the biggest letters that fit.
+    pub fn banner(&mut self, y: i32, s: &str, fg: Color, bg: Color) {
+        let font = Font::fit(s, W - 4);
+        let w = s.chars().count() as i32 * font.char_w();
+        self.label((W - w) / 2, y, s, fg, bg, font);
     }
 
     /// Text with a solid background bar behind it.
@@ -432,6 +515,31 @@ impl DrawTarget for Frame {
 impl OriginDimensions for Frame {
     fn size(&self) -> Size {
         Size::new(W as u32, H as u32)
+    }
+}
+
+/// Tests collect text that runs off the screen, to find screens that need a new layout.
+#[cfg(test)]
+pub mod overflow {
+    extern crate std;
+    use super::{Font, H, W};
+    use alloc::{format, string::String, vec::Vec};
+    use std::sync::Mutex;
+
+    pub static FOUND: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    pub fn check(x: i32, y: i32, s: &str, font: Font) {
+        let w = s.chars().count() as i32 * font.char_w();
+        if !s.trim().is_empty() && (x < 0 || y < 0 || x + w > W || y + font.line_h() > H + 1) {
+            FOUND
+                .lock()
+                .unwrap()
+                .push(format!("({x},{y}) {font:?} {s:?}"));
+        }
+    }
+
+    pub fn take() -> Vec<String> {
+        core::mem::take(&mut *FOUND.lock().unwrap())
     }
 }
 

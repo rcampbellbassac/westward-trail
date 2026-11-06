@@ -64,24 +64,18 @@ pub(crate) enum Opt {
 pub(crate) fn options(g: &Game, r: &RiverState) -> Vec<(Opt, String)> {
     let l = &g.data.landmarks[r.idx];
     let mut v = alloc::vec![
-        (Opt::Ford, String::from("Attempt to ford the river")),
-        (Opt::Float, String::from("Caulk the wagon and float")),
+        (Opt::Ford, String::from("Ford the river")),
+        (Opt::Float, String::from("Caulk and float")),
     ];
     if l.ferry > 0 {
-        v.push((
-            Opt::Ferry(l.ferry),
-            format!("Take a ferry for ${}", l.ferry),
-        ));
+        v.push((Opt::Ferry(l.ferry), format!("Take ferry (${})", l.ferry)));
     }
     if l.guide {
-        v.push((
-            Opt::Guide,
-            String::from("Hire a guide (3 sets of clothing)"),
-        ));
+        v.push((Opt::Guide, String::from("Guide (3 clothes)")));
     }
-    v.push((Opt::Wait, String::from("Wait to see if it gets better")));
-    v.push((Opt::Info, String::from("Get more information")));
-    v.push((Opt::Fish, String::from("Go fishing first")));
+    v.push((Opt::Wait, String::from("Wait a day")));
+    v.push((Opt::Info, String::from("More information")));
+    v.push((Opt::Fish, String::from("Go fishing")));
     v
 }
 
@@ -96,32 +90,16 @@ pub fn render(g: &Game, f: &mut Frame, r: &RiverState) {
         return;
     }
     ui::header(f, &l.name);
+    let opts = options(g, r);
+    let labels: Vec<&str> = opts.iter().map(|(_, s)| s.as_str()).collect();
+    ui::menu_fit(f, 3, ui::HEAD_H + 2, &labels);
     f.text(
         3,
-        14,
-        &format!("{}   {}", ui::date(g), ui::weather_word(g)),
-        gfx::GRAY,
-        Font::Normal,
+        ui::FOOTER_Y,
+        &format!("{} ft wide, {} deep", r.width, depth_text(r.depth10)),
+        gfx::SKY,
+        Font::Small,
     );
-    f.text(
-        3,
-        24,
-        &format!("Width {} feet, depth {}", r.width, depth_text(r.depth10)),
-        gfx::WHITE,
-        Font::Normal,
-    );
-    let mut y = 38;
-    for (i, (_, label)) in options(g, r).iter().enumerate() {
-        f.text(
-            3,
-            y,
-            &format!("{}. {label}", i + 1),
-            gfx::WHITE,
-            Font::Normal,
-        );
-        y += 10;
-    }
-    ui::footer(f, "What is your choice?");
 }
 
 fn render_crossing(g: &Game, f: &mut Frame, method: Method, ms: u32, name: &str) {
@@ -150,7 +128,7 @@ fn render_crossing(g: &Game, f: &mut Frame, method: Method, ms: u32, name: &str)
         Method::Ferry => "Riding the ferry...",
         Method::Guide => "Following your guide...",
     };
-    f.text(3, 14, what, gfx::BLACK, Font::Normal);
+    f.text(3, 18, what, gfx::BLACK, Font::Normal);
 }
 
 fn pictures_team(f: &mut Frame, x: i32, y: i32) {
@@ -333,27 +311,23 @@ pub fn render_dalles(g: &Game, f: &mut Frame) {
     let y = ui::para(
         f,
         3,
-        16,
-        "The trail ends here. To reach the valley you must choose:",
+        ui::TOP,
+        "The trail ends here. To reach the valley:",
         gfx::GRAY,
     );
-    let road = format!("Take the Barlow Road (${})", toll(g));
-    let y = ui::menu(
+    let road = format!("Barlow Road (${})", toll(g));
+    ui::menu(
         f,
         3,
         y + 4,
-        &[
-            "Raft down the Columbia River",
-            &road,
-            "Size up the situation",
-        ],
+        &["Raft the Columbia", &road, "Stop and size up"],
     );
     f.text(
         3,
-        y + 6,
+        ui::FOOTER_Y,
         &format!("Cash: {}", ui::money(g.t.sup.cash)),
         gfx::GREEN,
-        Font::Normal,
+        Font::Small,
     );
 }
 

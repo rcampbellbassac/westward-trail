@@ -319,36 +319,40 @@ pub fn render(g: &Game, f: &mut Frame, s: &SlotState) {
     };
     ui::header(f, title);
     for i in 0..SLOTS {
-        let y = 18 + i as i32 * 18;
+        let y = ui::HEAD_H + 3 + i as i32 * 20;
         let (label, color) = match g.slots[i].as_deref() {
             Some(text) => (
-                String::from(summary(text).unwrap_or("A saved trip")),
+                short_summary(summary(text).unwrap_or("A saved trip")),
                 gfx::WHITE,
             ),
             None => (String::from("(empty)"), gfx::GRAY),
         };
-        f.text(6, y, &format!("{}.", i + 1), gfx::YELLOW, Font::Normal);
-        let lines = gfx::wrap(&label, 36);
-        for (n, line) in lines.iter().take(2).enumerate() {
-            f.text(
-                24,
-                y + n as i32 * 8,
-                line,
-                color,
-                if lines.len() > 1 {
-                    Font::Small
-                } else {
-                    Font::Normal
-                },
-            );
-        }
+        f.text(3, y, &format!("{}.", i + 1), gfx::YELLOW, Font::Normal);
+        let label: String = label.chars().take(26).collect();
+        f.text(30, y + 2, &label, color, Font::Small);
     }
     let footer = match (s.mode, s.confirm) {
         (_, Some(slot)) => format!("Replace slot {}? Y or N", slot + 1),
-        (SlotMode::Save, None) => String::from("Pick a slot 1-5.  ESC: back"),
-        (SlotMode::Load, None) => String::from("Pick a trip 1-5.  ESC: back"),
+        (SlotMode::Save, None) => String::from("Pick a slot.  ESC: back"),
+        (SlotMode::Load, None) => String::from("Pick a trip.  ESC: back"),
     };
     ui::footer(f, &footer);
+}
+
+/// "Amos, April 1, 1848, Fort Laramie" becomes "Amos, Apr 1, Fort Laramie", to fit a line.
+fn short_summary(s: &str) -> String {
+    let parts: Vec<&str> = s.split(", ").collect();
+    match parts.as_slice() {
+        [leader, date, year, place @ ..]
+            if !place.is_empty() && year.chars().all(|c| c.is_ascii_digit()) =>
+        {
+            let mut words = date.split(' ');
+            let month: String = words.next().unwrap_or("").chars().take(3).collect();
+            let day = words.next().unwrap_or("");
+            format!("{leader}, {month} {day}, {}", place.join(", "))
+        }
+        _ => String::from(s),
+    }
 }
 
 /// Quietly wrap up a save op list for tests and platforms.

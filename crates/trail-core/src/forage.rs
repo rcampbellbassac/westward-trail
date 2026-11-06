@@ -14,7 +14,7 @@ use crate::{
 };
 
 const FP: i32 = 16;
-const TOP: i32 = 12;
+const TOP: i32 = 15;
 const FORAGE_MS: u32 = 30_000;
 const BASKET: u32 = 40;
 const WALK_SPEED: i32 = 50;
@@ -347,18 +347,18 @@ pub fn render(g: &Game, f: &mut Frame, s: &ForageState) {
             // Younger pioneers learn the names; seasoned ones have to know them.
             // Poisonous plants only get a subtle clue, so there's something to figure out.
             if g.t.mood == Mood::Gentle && plant.poison {
-                let lines = gfx::wrap(&plant.hint, 46);
+                let lines = gfx::wrap(&plant.hint, ui::FOOT_COLS);
                 let ly = if p.y > 60 {
-                    p.y - 10 - lines.len() as i32 * 9
+                    p.y - 10 - lines.len() as i32 * 13
                 } else {
                     p.y + sp.h() + 3
                 };
                 for (n, line) in lines.iter().enumerate() {
-                    let w = line.len() as i32 * 5 + 4;
+                    let w = line.len() as i32 * Font::Small.char_w() + 4;
                     let lx = (ax - w / 2).clamp(1, W - w - 1);
                     f.label(
                         lx,
-                        ly + n as i32 * 9,
+                        ly + n as i32 * 13,
                         line,
                         gfx::YELLOW,
                         gfx::rgb(40, 30, 10),
@@ -366,9 +366,9 @@ pub fn render(g: &Game, f: &mut Frame, s: &ForageState) {
                     );
                 }
             } else if g.t.mood == Mood::Gentle {
-                let w = plant.name.len() as i32 * 5 + 4;
+                let w = plant.name.len() as i32 * Font::Small.char_w() + 4;
                 let lx = (ax - w / 2).clamp(1, W - w - 1);
-                let ly = (p.y - 15).max(TOP + 1);
+                let ly = (p.y - 20).max(TOP + 1);
                 f.label(
                     lx,
                     ly,
@@ -388,32 +388,17 @@ pub fn render(g: &Game, f: &mut Frame, s: &ForageState) {
     f.text(
         3,
         2,
-        &format!("Basket {}/{BASKET} lbs   Time {left}", total(s)),
+        &format!("Basket {}/{BASKET} lbs  Time {left}", total(s)),
         gfx::WHITE,
         Font::Small,
     );
     if let Some((msg, _)) = &s.flash {
-        let lines = gfx::wrap(msg, 38);
+        let lines = gfx::wrap(msg, ui::COLS);
         for (n, line) in lines.iter().enumerate() {
-            let w = line.len() as i32 * 6;
-            f.label(
-                (W - w) / 2,
-                16 + n as i32 * 11,
-                line,
-                gfx::YELLOW,
-                gfx::BLACK,
-                Font::Normal,
-            );
+            f.banner(TOP + 2 + n as i32 * 17, line, gfx::YELLOW, gfx::BLACK);
         }
     }
     if s.elapsed < 2500 {
-        f.label(
-            34,
-            H - 12,
-            "Move: arrows/WASD   Pick: SPACE",
-            gfx::WHITE,
-            gfx::BLACK,
-            Font::Small,
-        );
+        f.banner(H - 17, "Arrows move. SPACE picks", gfx::WHITE, gfx::BLACK);
     }
 }

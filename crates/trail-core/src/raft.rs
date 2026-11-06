@@ -129,7 +129,7 @@ pub fn tick(g: &mut Game, mut s: Box<RaftState>, ms: u32) -> Scene {
 pub fn render(g: &Game, f: &mut Frame, s: &RaftState) {
     f.clear(gfx::rgb(60, 120, 60));
     let top_world = s.dist / FP + RAFT_Y;
-    for sy in 12..H {
+    for sy in 15..H {
         let wy = top_world - sy;
         let (l, r) = banks(wy);
         f.rect(l, sy, r - l, 1, gfx::BLUE);
@@ -153,24 +153,17 @@ pub fn render(g: &Game, f: &mut Frame, s: &RaftState) {
     if !blink {
         f.sprite(s.x / FP, RAFT_Y, &sprites::RAFT, false);
     }
-    f.rect(0, 0, W, 12, gfx::BLACK);
+    f.rect(0, 0, W, 15, gfx::BLACK);
     let left = (RIVER_LEN - s.dist / FP).max(0) * 100 / RIVER_LEN;
     f.text(
         3,
         2,
-        &format!("Columbia River   Bumps {}   {left}% to go", s.hits),
+        &format!("Bumps {}   {left}% to go", s.hits),
         gfx::WHITE,
         Font::Small,
     );
     if s.dist / FP < 120 {
-        f.label(
-            40,
-            H - 12,
-            "Steer: LEFT/RIGHT (A/D)",
-            gfx::WHITE,
-            gfx::BLACK,
-            Font::Small,
-        );
+        f.banner(H - 17, "Steer: LEFT and RIGHT", gfx::WHITE, gfx::BLACK);
     }
 }
 

@@ -43,7 +43,7 @@ single-player game stays exactly as it is.
 | 1 | **Wagon race** | Same trail, same seed (same weather and luck). Everyone drives their own wagon and sees the others on the map and travel screen ("Sam reached Fort Laramie!"). Shared Top Ten at the end. |
 | 2 | **Wagon train** | The race, plus trading and giving supplies between wagons, and messages picked from a list. |
 | 3 | **Hunt together** | Several hunters in the same field in real time, sharing the meat. |
-| 4 | **One wagon, many drivers** | Players take turns making the choices for one shared party. |
+| 4 | **One wagon, many drivers** ("Take turns" in the game) | Players take turns making the choices for one shared party. |
 | 5 | **Democracy** | Everyone is one member of the same party, and the party votes on every choice. |
 | 6 | **Fun races** | The wagon, foot and sled races from "Fun and games", up to 4 players. Computer racers fill the empty spots. |
 

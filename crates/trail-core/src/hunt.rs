@@ -15,7 +15,7 @@ use crate::{
 };
 
 const FP: i32 = 16;
-const TOP: i32 = 12;
+const TOP: i32 = 15;
 const HUNT_MS: u32 = 30_000;
 const CARRY: u32 = 100;
 const HUNTER_SPEED: i32 = 55;
@@ -462,22 +462,14 @@ pub fn render(g: &Game, f: &mut Frame, h: &HuntState) {
     f.text(
         3,
         2,
-        &format!("Bullets {ammo}   Meat {} lbs   Time {left}", h.lbs()),
+        &format!("Bullets {ammo}  Meat {}  Time {left}", h.lbs()),
         gfx::WHITE,
         Font::Small,
     );
     if let Some((msg, _)) = &h.flash {
-        let w = msg.len() as i32 * 6;
-        f.label((W - w) / 2, 16, msg, gfx::YELLOW, gfx::BLACK, Font::Normal);
+        f.banner(TOP + 2, msg, gfx::YELLOW, gfx::BLACK);
     }
     if h.elapsed < 2500 {
-        f.label(
-            30,
-            H - 12,
-            "Move: arrows/WASD   Shoot: SPACE",
-            gfx::WHITE,
-            gfx::BLACK,
-            Font::Small,
-        );
+        f.banner(H - 17, "Arrows move. SPACE shoots", gfx::WHITE, gfx::BLACK);
     }
 }

@@ -46,24 +46,47 @@ const GREEN: gfx::Color = gfx::rgb(60, 255, 90);
 
 pub fn render(g: &Game, f: &mut Frame, t: &TermState) {
     f.clear(gfx::rgb(0, 12, 0));
-    let rows = 11;
-    let start = t.lines.len().saturating_sub(rows);
-    let mut y = 2;
-    for line in &t.lines[start..] {
-        f.text(2, y, line, GREEN, Font::Normal);
-        y += 11;
+    // Small letters, 29 to a row; long lines carry on in the next row.
+    let cols = 29;
+    let mut rows: Vec<String> = Vec::new();
+    for line in &t.lines {
+        let chars: Vec<char> = line.chars().collect();
+        if chars.is_empty() {
+            rows.push(String::new());
+        }
+        // Break long lines at a space when there is one, keeping the spaces that line up columns.
+        let mut rest: &[char] = &chars;
+        while rest.len() > cols {
+            let cut = rest[..=cols]
+                .iter()
+                .rposition(|&c| c == ' ')
+                .filter(|&i| i > 0)
+                .unwrap_or(cols);
+            rows.push(rest[..cut].iter().collect());
+            rest = &rest[cut..];
+            while rest.first() == Some(&' ') {
+                rest = &rest[1..];
+            }
+        }
+        if !rest.is_empty() {
+            rows.push(rest.iter().collect());
+        }
     }
-    f.rect(0, 122, W, 13, gfx::rgb(0, 40, 0));
+    let shown = 9;
+    let start = rows.len().saturating_sub(shown);
+    let mut y = 1;
+    for line in &rows[start..] {
+        f.text(2, y, line, GREEN, Font::Small);
+        y += 13;
+    }
+    f.rect(0, 119, W, 16, gfx::rgb(0, 40, 0));
     let cursor = if (g.clock / 350) % 2 == 0 { "#" } else { " " };
-    f.text(
-        2,
-        124,
-        &format!("> {}{cursor}", t.buf),
-        gfx::WHITE,
-        Font::Normal,
-    );
+    let input = format!("> {}{cursor}", t.buf);
+    let skip = input.chars().count().saturating_sub(cols);
+    let input: String = input.chars().skip(skip).collect();
+    f.text(2, 121, &input, gfx::WHITE, Font::Small);
     if g.cheats.used {
-        f.text(W - 42, 125, "[HACKED]", gfx::YELLOW, Font::Small);
+        f.text(W - 66, 1, "[HACKED]", gfx::YELLOW, Font::Small);
     }
 }
 

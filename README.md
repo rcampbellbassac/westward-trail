@@ -34,6 +34,11 @@ project isn't affiliated with them. The code, text and pixel art here are origin
   2 yellow, 3 pink...), ENTER and Y are green, ESC and N red, SPACE white. The on-screen keyboard (always on phones,
   **Show keys** with a mouse) uses the same colors, so "press the pink one" works. Every menu choice also has a
   little picture beside it (a wagon to travel, a fish to go fishing, a trophy for the Top Ten...): `icons.rs`.
+- **Big letters** for young readers on the Cardputer's 1.14" screen: the 5x8 font drawn at double size (10x16, thick
+  2-pixel strokes, 24 letters by 8 lines), with an 8x13 bold font for footers. Busy screens are split up: the Top Ten
+  shows five at a time and the trail menu uses short words with pictures. `ui.rs` holds the layout numbers
+  (`TOP`, `LINE`, `COLS`, `ROWS`); `TRAIL_SHOTS=/tmp/shots cargo test -p trail-core gallery` saves every screen as a
+  BMP and prints any text that runs off the screen.
 - **Screenshots**: the Screenshot button on the web, Fn+P on the Cardputer (`WESTWARD/SHOT0001.BMP` on the SD card)
 - SD cards can be **FAT32 or exFAT**. `firmware/components/fatfs` is ESP-IDF's FatFs component with exFAT switched on
   (`FF_FS_EXFAT 1` in `src/ffconf.h`); it replaces the built-in copy. Its files keep their own licenses.

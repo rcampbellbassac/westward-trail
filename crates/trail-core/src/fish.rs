@@ -49,7 +49,7 @@ impl FishState {
             lbs: 0,
             caught: 0,
             last: None,
-            note: String::from("Press SPACE to cast your line."),
+            note: String::from("Press SPACE to cast."),
             cast_x: 140,
             river: None,
         }
@@ -72,7 +72,7 @@ pub fn key(g: &mut Game, mut s: Box<FishState>, k: Key) -> Scene {
         }
         Stage::Waiting(_) => {
             s.stage = Stage::Result(1200);
-            s.note = String::from("Too soon! You scared the fish away.");
+            s.note = String::from("Too soon! It swam away.");
             s.last = None;
         }
         Stage::Bite(_) => {
@@ -90,14 +90,14 @@ pub fn key(g: &mut Game, mut s: Box<FishState>, k: Key) -> Scene {
                     s.lbs += lbs;
                     if lbs > 0 {
                         s.caught += 1;
-                        s.note = format!("You caught a {lbs} pound {name}!");
+                        s.note = format!("A {lbs} lb {name}!");
                     } else {
-                        s.note = format!("You caught an {name}. Yuck!");
+                        s.note = format!("An {name}. Yuck!");
                     }
                     s.last = Some((i, lbs));
                     g.tune(&[(523, 60), (784, 60), (1047, 100)]);
                 }
-                None => s.note = String::from("Nothing seems to live in this river..."),
+                None => s.note = String::from("No fish here..."),
             }
             s.stage = Stage::Result(1800);
         }
@@ -124,7 +124,7 @@ pub fn tick(g: &mut Game, mut s: Box<FishState>, ms: u32) -> Scene {
         }
         Stage::Waiting(t) => Stage::Waiting(t - dt),
         Stage::Bite(t) if t - dt <= 0 => {
-            s.note = String::from("It got away! Press SPACE to cast again.");
+            s.note = String::from("It got away! Cast again.");
             s.last = None;
             Stage::Result(1500)
         }
@@ -209,14 +209,16 @@ pub fn render(g: &Game, f: &mut Frame, s: &FishState) {
         };
         f.sprite(110, 18, sprite, false);
     }
-    f.rect(0, 0, W, 12, gfx::BLACK);
+    f.rect(0, 0, W, 15, gfx::BLACK);
     let left = FISH_MS.saturating_sub(s.elapsed) / 1000;
     f.text(
         3,
         2,
-        &format!("Fish {}   Food {} lbs   Time {left}", s.caught, s.lbs),
+        &format!("Fish {}  Food {}  Time {left}", s.caught, s.lbs),
         gfx::WHITE,
         Font::Small,
     );
-    f.label(4, H - 12, &s.note, gfx::WHITE, gfx::BLACK, Font::Normal);
+    if !s.note.is_empty() {
+        f.banner(H - 17, &s.note, gfx::WHITE, gfx::BLACK);
+    }
 }

@@ -8,14 +8,31 @@ use crate::{
     pictures,
 };
 
-pub const COLS: usize = 39;
-const MSG_TEXT_TOP: i32 = 16;
-const MSG_PIC_TEXT_TOP: i32 = 76;
-const FOOTER_Y: i32 = 126;
+/// Letters across a full line of normal text.
+pub const COLS: usize = 23;
+/// The height of the title bar.
+pub const HEAD_H: i32 = 18;
+/// Where the text under the title bar starts.
+pub const TOP: i32 = 21;
+/// From one line of normal text to the next.
+pub const LINE: i32 = 16;
+/// Lines of normal text between the title bar and the footer.
+pub const ROWS: usize = 6;
+/// Letters across a footer (small text).
+pub const FOOT_COLS: usize = 29;
+pub const FOOTER_Y: i32 = 122;
+const MSG_PIC_TOP: i32 = HEAD_H;
+const MSG_PIC_H: i32 = 52;
+const MSG_PIC_TEXT_TOP: i32 = MSG_PIC_TOP + MSG_PIC_H + 2;
 
+/// The title bar. A title too long for normal letters gets small ones.
 pub fn header(f: &mut Frame, title: &str) {
-    f.rect(0, 0, W, 12, gfx::TAN);
-    f.text(3, 1, title, gfx::BLACK, Font::Normal);
+    f.rect(0, 0, W, HEAD_H, gfx::TAN);
+    if title.chars().count() as i32 * Font::Normal.char_w() <= W - 4 {
+        f.text(3, 1, title, gfx::BLACK, Font::Normal);
+    } else {
+        f.text(3, 3, title, gfx::BLACK, Font::Small);
+    }
 }
 
 pub fn footer(f: &mut Frame, s: &str) {
@@ -32,7 +49,28 @@ pub fn menu(f: &mut Frame, x: i32, mut y: i32, items: &[&str]) -> i32 {
             gfx::WHITE,
             Font::Normal,
         );
-        y += 10;
+        y += LINE;
+    }
+    y
+}
+
+/// Numbered menu that squeezes its rows a little when they would reach the footer.
+pub fn menu_fit(f: &mut Frame, x: i32, y: i32, items: &[&str]) -> i32 {
+    let step = if y + items.len() as i32 * LINE > FOOTER_Y {
+        14
+    } else {
+        LINE
+    };
+    let mut y = y;
+    for (i, item) in items.iter().enumerate() {
+        f.text(
+            x,
+            y,
+            &format!("{}. {}", i + 1, item),
+            gfx::WHITE,
+            Font::Normal,
+        );
+        y += step;
     }
     y
 }
@@ -42,7 +80,7 @@ pub fn para(f: &mut Frame, x: i32, mut y: i32, text: &str, c: gfx::Color) -> i32
     let cols = ((W - x - 2) / Font::Normal.char_w()) as usize;
     for line in gfx::wrap(text, cols) {
         f.text(x, y, &line, c, Font::Normal);
-        y += 10;
+        y += LINE;
     }
     y
 }
@@ -124,6 +162,12 @@ pub fn date(g: &Game) -> String {
     format!("{} {}, {}", MONTHS[m], d, y)
 }
 
+/// "Apr 1, 1848": the date with a short month, for tight spaces.
+pub fn short_date(g: &Game) -> String {
+    let (m, d, y) = month_day(g.data.year, g.t.day.max(1));
+    format!("{} {}, {}", &MONTHS[m][..3], d, y)
+}
+
 pub fn month_index(g: &Game) -> usize {
     month_day(g.data.year, g.t.day.max(1)).0
 }
@@ -162,7 +206,7 @@ pub fn rations_word(r: usize) -> &'static str {
 
 fn msg_lines(m: &Msg) -> (alloc::vec::Vec<String>, usize) {
     let lines = gfx::wrap(&m.body, COLS);
-    let cap = if matches!(m.pic, Pic::None) { 10 } else { 5 };
+    let cap = if matches!(m.pic, Pic::None) { ROWS } else { 3 };
     (lines, cap)
 }
 
@@ -175,18 +219,18 @@ pub fn render_msg(g: &Game, f: &mut Frame, m: &Msg) {
     header(f, &m.title);
     let (lines, cap) = msg_lines(m);
     let mut y = if matches!(m.pic, Pic::None) {
-        MSG_TEXT_TOP
+        TOP
     } else {
         MSG_PIC_TEXT_TOP
     };
     match &m.pic {
         Pic::None => {}
-        Pic::Landmark(i) => pictures::landmark(g, f, *i, 12, 62),
-        Pic::Tomb(name) => pictures::tomb(f, name, 12, 62),
+        Pic::Landmark(i) => pictures::landmark(g, f, *i, MSG_PIC_TOP, MSG_PIC_H),
+        Pic::Tomb(name) => pictures::tomb(f, name, MSG_PIC_TOP, MSG_PIC_H),
     }
     for line in lines.iter().skip(m.page * cap).take(cap) {
         f.text(3, y, line, gfx::WHITE, Font::Normal);
-        y += 10;
+        y += LINE;
     }
     let more = (m.page + 1) * cap < lines.len();
     footer(

@@ -241,9 +241,10 @@ pub fn tomb(f: &mut Frame, name: &str, top: i32, h: i32) {
     let base = top + h - 8;
     f.rect(0, top, W, h, gfx::rgb(40, 40, 70));
     f.rect(0, base, W, top + h - base, gfx::rgb(70, 110, 50));
-    dome(f, 120, base - 30, 22, 12, gfx::GRAY);
-    f.rect(98, base - 30, 45, 30, gfx::GRAY);
-    f.text(111, base - 34, "RIP", gfx::BLACK, Font::Normal);
-    let w = name.chars().count() as i32 * 5;
-    f.text(120 - w / 2, base - 20, name, gfx::BLACK, Font::Small);
+    dome(f, 120, base - 34, 50, 10, gfx::GRAY);
+    f.rect(70, base - 34, 101, 34, gfx::GRAY);
+    f.text(105, base - 36, "RIP", gfx::BLACK, Font::Normal);
+    let name: alloc::string::String = name.chars().take(12).collect();
+    let w = name.chars().count() as i32 * Font::Small.char_w();
+    f.text(120 - w / 2, base - 17, &name, gfx::BLACK, Font::Small);
 }

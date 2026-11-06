@@ -10,7 +10,7 @@ use embedded_graphics::{
 use crate::{
     Game, Key, Mood, Pic, Precip, Scene,
     data::{Kind, Skill, Terrain},
-    gfx::{self, Font, Frame, W},
+    gfx::{self, Font, Frame, H, W},
     hunt, pictures, river, score, store, ui,
 };
 
@@ -612,43 +612,39 @@ fn sky(g: &Game) -> gfx::Color {
     }
 }
 
+/// The height of the moving picture on the travel screen; the words go under it.
+const SCENE_H: i32 = 70;
+
 pub fn render_travel(g: &Game, f: &mut Frame, acc_ms: u32) {
     let scroll = (g.t.miles * 6) as i32 + (acc_ms / 60) as i32;
-    pictures::backdrop(f, terrain(g), 0, 72, scroll, sky(g));
-    let horizon = 72 * 3 / 5;
+    pictures::backdrop(f, terrain(g), 0, SCENE_H, scroll, sky(g));
+    let horizon = SCENE_H * 3 / 5;
     if let Some(l) = g.data.landmarks.get(g.t.next) {
         let dist = l.mile.saturating_sub(g.t.miles) as i32;
         if dist < 40 {
             pictures::mini_landmark(f, &l.picture, 90 - dist * 3, horizon);
         }
     }
-    pictures::team(f, 110, 46, (g.clock / 250) as usize);
+    pictures::team(f, 110, horizon + 4, (g.clock / 250) as usize);
     match g.t.precip {
         Precip::Rain => {
             for i in 0..40 {
                 let x = (i * 47 + (g.clock / 20) as i32) % W;
-                let y = (i * 23 + (g.clock / 10) as i32) % 72;
+                let y = (i * 23 + (g.clock / 10) as i32) % SCENE_H;
                 f.rect(x, y, 1, 3, gfx::rgb(200, 210, 255));
             }
         }
         Precip::Snow => {
             for i in 0..40 {
                 let x = (i * 47 + (g.clock / 60) as i32) % W;
-                let y = (i * 23 + (g.clock / 40) as i32) % 72;
+                let y = (i * 23 + (g.clock / 40) as i32) % SCENE_H;
                 f.rect(x, y, 2, 2, gfx::WHITE);
             }
         }
         Precip::Clear => {}
     }
-    crate::net::render_strip(g, f, 68);
-    f.label(
-        3,
-        2,
-        "ENTER: size up the situation",
-        gfx::WHITE,
-        gfx::BLACK,
-        Font::Small,
-    );
+    crate::net::render_strip(g, f, SCENE_H - 4);
+    f.label(3, 2, "ENTER: stop", gfx::WHITE, gfx::BLACK, Font::Small);
 
     let next = g
         .data
@@ -656,18 +652,22 @@ pub fn render_travel(g: &Game, f: &mut Frame, acc_ms: u32) {
         .get(g.t.next)
         .map_or(0, |l| l.mile.saturating_sub(g.t.miles));
     let lines = [
-        ("Date:", ui::date(g)),
-        ("Weather:", String::from(ui::weather_word(g))),
-        ("Health:", String::from(ui::health_word(g.t.health))),
-        ("Food:", format!("{} pounds", g.t.sup.food)),
-        ("Next landmark:", format!("{next} miles")),
-        ("Miles traveled:", format!("{} miles", g.t.miles)),
+        (
+            String::new(),
+            format!("{}  {}", ui::short_date(g), ui::weather_word(g)),
+        ),
+        (
+            String::from("Health: "),
+            String::from(ui::health_word(g.t.health)),
+        ),
+        (String::from("Food: "), format!("{} lbs", g.t.sup.food)),
+        (format!("{} mi. ", g.t.miles), format!("Next: {next} mi")),
     ];
-    let mut y = 75;
+    let mut y = SCENE_H + 1;
     for (k, v) in lines {
-        f.text(40, y, k, gfx::GRAY, Font::Normal);
-        f.text(136, y, &v, gfx::WHITE, Font::Normal);
-        y += 10;
+        let w = f.text(3, y, &k, gfx::GRAY, Font::Normal);
+        f.text(3 + w, y, &v, gfx::WHITE, Font::Normal);
+        y += ui::LINE;
     }
 }
 
@@ -722,20 +722,20 @@ fn here(g: &Game) -> Option<&crate::data::Landmark> {
 
 pub(crate) fn actions(g: &Game) -> Vec<(Act, &'static str)> {
     let mut v = alloc::vec![
-        (Act::Continue, "Continue on trail"),
-        (Act::Supplies, "Check supplies"),
-        (Act::Map, "Look at map"),
-        (Act::Pace, "Change pace"),
-        (Act::Rations, "Change rations"),
-        (Act::Rest, "Stop to rest"),
-        (Act::Trade, "Attempt to trade"),
+        (Act::Continue, "Continue"),
+        (Act::Supplies, "Supplies"),
+        (Act::Map, "Map"),
+        (Act::Pace, "Pace"),
+        (Act::Rations, "Rations"),
+        (Act::Rest, "Rest"),
+        (Act::Trade, "Trade"),
     ];
     if let Some(l) = here(g) {
         if !l.talk.is_empty() {
-            v.push((Act::Talk, "Talk to people"));
+            v.push((Act::Talk, "Talk"));
         }
         if matches!(l.kind, Kind::Fort | Kind::Town) {
-            v.push((Act::Buy, "Buy supplies"));
+            v.push((Act::Buy, "Buy"));
         }
     }
     v
@@ -751,64 +751,59 @@ pub(crate) fn can_fish(g: &Game) -> bool {
 pub fn render_sizeup(g: &Game, f: &mut Frame) {
     let title = here(g).map_or_else(|| String::from("On the trail"), |l| l.name.clone());
     ui::header(f, &title);
-    let rows = [
-        format!("{}   Weather: {}", ui::date(g), ui::weather_word(g)),
-        format!(
-            "Health: {}   Pace: {}",
-            ui::health_word(g.t.health),
-            ui::pace_word(g.t.pace)
-        ),
-        format!(
-            "Rations: {}   Food: {} lbs",
-            ui::rations_word(g.t.rations),
-            g.t.sup.food
-        ),
-    ];
-    for (i, r) in rows.iter().enumerate() {
-        f.text(3, 14 + i as i32 * 10, r, gfx::GRAY, Font::Normal);
-    }
     let acts = actions(g);
     let mut items: Vec<String> = acts
         .iter()
         .enumerate()
         .map(|(i, (_, s))| format!("{}. {s}", i + 1))
         .collect();
-    items.push(String::from("H. Go hunting"));
+    items.push(String::from("H. Hunt"));
     if can_fish(g) {
-        items.push(String::from("F. Go fishing"));
+        items.push(String::from("F. Fish"));
     }
-    items.push(String::from("G. Gather food"));
-    items.push(String::from("P. Play a game"));
+    items.push(String::from("G. Gather"));
+    items.push(String::from("P. Games"));
     if g.net.racing && g.net.settings.mode.own_wagons() {
         items.push(String::from(
             if g.net.settings.mode == crate::net::Mode::Train {
-                "R. Wagon train"
+                "R. Train"
             } else {
-                "R. Race standings"
+                "R. Standings"
             },
         ));
     } else if !g.net.racing {
-        items.push(String::from("S. Save trip"));
+        items.push(String::from("S. Save"));
     }
+    // Two columns of short words with pictures, rows a little closer than usual.
     let per_col = items.len().div_ceil(2);
+    let step = if per_col > 6 { 14 } else { ui::LINE };
     for (i, s) in items.iter().enumerate() {
-        let x = if i < per_col { 2 } else { 126 };
-        let y = 48 + (i % per_col) as i32 * 10;
+        let x = if i < per_col { 3 } else { 122 };
+        let y = ui::HEAD_H + 2 + (i % per_col) as i32 * step;
         f.text(x, y, s, gfx::WHITE, Font::Normal);
     }
     if g.cheats.peek {
         f.text(
             3,
-            116,
+            ui::FOOTER_Y,
             &format!(
-                "[peek] hp={} lame={} temp={}F oxen={}",
+                "hp{} lame{} {}F oxen{}",
                 g.t.health, g.t.ox_lame, g.t.temp, g.t.sup.oxen
             ),
             gfx::GREEN,
             Font::Small,
         );
+    } else {
+        ui::footer(
+            f,
+            &format!(
+                "{}  Food {}  {}",
+                ui::short_date(g).split(',').next().unwrap_or(""),
+                g.t.sup.food,
+                ui::health_word(g.t.health)
+            ),
+        );
     }
-    ui::footer(f, "What is your choice?");
 }
 
 pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
@@ -881,23 +876,29 @@ pub fn sizeup_key(g: &mut Game, k: Key) -> Scene {
 pub fn render_supplies(g: &Game, f: &mut Frame) {
     ui::header(f, "Your supplies");
     let s = &g.t.sup;
+    // Two columns: label on the left, number lined up on the right.
     let rows = [
-        ("Oxen", format!("{}", s.oxen)),
-        ("Sets of clothing", format!("{}", s.clothing)),
-        ("Bullets", format!("{}", s.ammo)),
-        ("Wagon wheels", format!("{}", s.wheels)),
-        ("Wagon axles", format!("{}", s.axles)),
-        ("Wagon tongues", format!("{}", s.tongues)),
-        ("Pounds of food", format!("{}", s.food)),
-        ("Money left", ui::money(s.cash)),
+        ("Oxen", s.oxen),
+        ("Clothes", s.clothing),
+        ("Bullets", s.ammo),
+        ("Food", s.food),
+        ("Wheels", s.wheels),
+        ("Axles", s.axles),
+        ("Tongues", s.tongues),
     ];
-    let mut y = 15;
-    for (k, v) in rows {
-        f.text(12, y, k, gfx::GRAY, Font::Normal);
-        f.text(150, y, &v, gfx::WHITE, Font::Normal);
-        y += 10;
+    for (i, (k, v)) in rows.iter().enumerate() {
+        let (x0, x1) = if i < 4 { (3, 117) } else { (127, 237) };
+        let y = ui::HEAD_H + 2 + (i % 4) as i32 * 15;
+        f.text(x0, y, k, gfx::GRAY, Font::Normal);
+        let v = format!("{v}");
+        f.text(x1 - v.len() as i32 * 10, y, &v, gfx::WHITE, Font::Normal);
     }
-    let mut x = 3;
+    let w = f.text(127, ui::HEAD_H + 2 + 45, "$", gfx::GRAY, Font::Normal);
+    let cash = ui::money(s.cash);
+    let cash = cash.trim_start_matches('$');
+    f.text(127 + w, ui::HEAD_H + 2 + 45, cash, gfx::GREEN, Font::Normal);
+    // The party, colored by health, in rows of small letters.
+    let (mut x, mut y) = (3, 100);
     for p in &g.t.party {
         let c = if p.gone {
             gfx::DARK_GRAY
@@ -906,9 +907,16 @@ pub fn render_supplies(g: &Game, f: &mut Frame) {
         } else {
             gfx::GREEN
         };
-        x += f.text(x, y + 2, &p.name, c, Font::Small) + 6;
+        let w = p.name.chars().count() as i32 * Font::Small.char_w();
+        if x + w > W - 2 {
+            x = 3;
+            y += 12;
+        }
+        x += f.text(x, y, &p.name, c, Font::Small) + 8;
     }
-    ui::footer(f, "Press any key. (orange = sick)");
+    if y < 112 {
+        ui::footer(f, "Any key. Orange = sick");
+    }
 }
 
 /// The trail runs east to west, so Missouri is on the right and Oregon on the left.
@@ -939,7 +947,7 @@ fn map_at(g: &Game, miles: u32) -> Point {
 
 pub fn render_map(g: &Game, f: &mut Frame) {
     ui::header(f, "Map of the trail");
-    f.rect(0, 12, W, 113, gfx::rgb(200, 180, 130));
+    f.rect(0, ui::HEAD_H, W, H - ui::HEAD_H, gfx::rgb(200, 180, 130));
     for (cx, w) in [(122, 30), (105, 24), (45, 20)] {
         pictures::mountain(f, cx, 40, 62, w, gfx::rgb(150, 130, 100), false);
     }
@@ -984,36 +992,33 @@ pub fn render_map(g: &Game, f: &mut Frame) {
     }
     let start = lms[0].name.split(',').next().unwrap_or("");
     f.text(
-        W - 4 - 5 * start.chars().count() as i32,
-        108,
+        W - 4 - Font::Small.char_w() * start.chars().count() as i32,
+        104,
         start,
         gfx::BLACK,
         Font::Small,
     );
-    f.text(4, 108, "Oregon", gfx::BLACK, Font::Small);
-    f.text(W - 30, 14, "N", gfx::BLACK, Font::Small);
-    f.text(W - 40, 22, "W   E", gfx::BLACK, Font::Small);
+    f.text(4, 104, "Oregon", gfx::BLACK, Font::Small);
+    f.text(W - 32, 20, "N", gfx::BLACK, Font::Small);
+    f.text(W - 48, 30, "W   E", gfx::BLACK, Font::Small);
     let next_name = lms.get(g.t.next).map_or("", |l| l.name.as_str());
-    f.text(
-        4,
-        116,
-        &format!("Next: {next_name}"),
-        gfx::DARK_BLUE,
-        Font::Small,
-    );
-    ui::footer(f, "Press any key.");
+    let next: String = format!("Next: {next_name}")
+        .chars()
+        .take(ui::FOOT_COLS)
+        .collect();
+    f.text(4, ui::FOOTER_Y, &next, gfx::DARK_BLUE, Font::Small);
 }
 
 // ---------------------------------------------------------------- pace, rations, rest
 
 pub fn render_pace(g: &Game, f: &mut Frame) {
     ui::header(f, &format!("Pace: {}", ui::pace_word(g.t.pace)));
-    let y = ui::menu(f, 3, 16, &["Steady", "Strenuous", "Grueling"]);
+    let y = ui::menu(f, 3, ui::TOP, &["Steady", "Strenuous", "Grueling"]);
     ui::para(
         f,
         3,
         y + 4,
-        "Steady: 8 hours a day, rest often. Strenuous: 12 hours, people get tired. Grueling: 16 hours, people get sick fast!",
+        "Faster gets there sooner, but people get tired and sick.",
         gfx::GRAY,
     );
 }
@@ -1027,12 +1032,12 @@ pub fn pace_key(g: &mut Game, k: Key) -> Scene {
 
 pub fn render_rations(g: &Game, f: &mut Frame) {
     ui::header(f, &format!("Rations: {}", ui::rations_word(g.t.rations)));
-    let y = ui::menu(f, 3, 16, &["Filling", "Meager", "Bare bones"]);
+    let y = ui::menu(f, 3, ui::TOP, &["Filling", "Meager", "Bare bones"]);
     ui::para(
         f,
         3,
         y + 4,
-        "Filling: big meals (3 lbs each a day). Meager: small meals (2 lbs). Bare bones: barely enough (1 lb). Hungry people get sick.",
+        "Less food lasts longer, but hungry people get sick.",
         gfx::GRAY,
     );
 }
@@ -1046,22 +1051,22 @@ pub fn rations_key(g: &mut Game, k: Key) -> Scene {
 
 pub fn render_rest(g: &Game, f: &mut Frame, buf: &str) {
     ui::header(f, "Stop to rest");
-    ui::para(
+    let y = ui::para(
         f,
         3,
-        18,
-        "Resting helps sick people and tired oxen get better. You still eat food.",
+        ui::TOP,
+        "Resting helps sick people and tired oxen. You still eat food.",
         gfx::GRAY,
     );
     let cursor = if (g.clock / 400) % 2 == 0 { "_" } else { " " };
     f.text(
         3,
-        60,
-        &format!("How many days? (1-9) {buf}{cursor}"),
+        y + 8,
+        &format!("How many days? {buf}{cursor}"),
         gfx::YELLOW,
         Font::Normal,
     );
-    ui::footer(f, "Type a number, ENTER.  ESC: cancel.");
+    ui::footer(f, "1-9, ENTER.  ESC: cancel");
 }
 
 pub fn rest_key(g: &mut Game, mut buf: String, k: Key) -> Scene {
@@ -1182,7 +1187,7 @@ pub fn render_trade(g: &Game, f: &mut Frame, offer: Option<&Offer>) {
             ui::para(
                 f,
                 3,
-                18,
+                ui::TOP,
                 "Nobody wants to trade with you today.",
                 gfx::WHITE,
             );
@@ -1194,7 +1199,7 @@ pub fn render_trade(g: &Game, f: &mut Frame, offer: Option<&Offer>) {
                 item_text(o.give.0, o.give.1),
                 item_text(o.get.0, o.get.1)
             );
-            let y = ui::para(f, 3, 18, &text, gfx::WHITE);
+            let y = ui::para(f, 3, ui::TOP, &text, gfx::WHITE);
             let have = match o.give.0 {
                 Item::Oxen => g.t.sup.oxen,
                 Item::Food => g.t.sup.food,
@@ -1204,20 +1209,9 @@ pub fn render_trade(g: &Game, f: &mut Frame, offer: Option<&Offer>) {
                 Item::Axle => g.t.sup.axles,
                 Item::Tongue => g.t.sup.tongues,
             };
-            f.text(
-                3,
-                y + 6,
-                &format!("You have {}.", item_text(o.give.0, have)),
-                gfx::GRAY,
-                Font::Normal,
-            );
-            f.text(
-                3,
-                y + 22,
-                "Are you willing to trade? (Y/N)",
-                gfx::YELLOW,
-                Font::Normal,
-            );
+            let have = format!("You have {}.", item_text(o.give.0, have));
+            let y = ui::para(f, 3, y + 2, &have, gfx::GRAY);
+            f.text(3, y + 2, "Trade? (Y/N)", gfx::YELLOW, Font::Normal);
         }
     }
 }

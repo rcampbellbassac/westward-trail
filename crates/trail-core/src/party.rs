@@ -549,18 +549,19 @@ pub fn overlay(g: &Game, f: &mut Frame) {
         Mode::Shared => {
             let name = n.name_of(n.party.driver);
             let text = format!("Driver: {name}");
-            let w = text.len() as i32 * 5 + 4;
-            f.rect(W - w - 1, H - 22, w + 1, 10, gfx::BLACK);
-            f.rect(W - w - 1, H - 22, 3, 10, n.color(n.party.driver));
-            f.text(W - w + 3, H - 21, &text, gfx::YELLOW, Font::Small);
+            let text: String = text.chars().take(27).collect();
+            let w = text.chars().count() as i32 * Font::Small.char_w() + 4;
+            f.rect(W - w - 1, H - 29, w + 1, 15, gfx::BLACK);
+            f.rect(W - w - 1, H - 29, 3, 15, n.color(n.party.driver));
+            f.text(W - w + 3, H - 28, &text, gfx::YELLOW, Font::Small);
         }
         Mode::Democracy if g.msgs.is_empty() && vote_keys(g).is_some() => {
             let text = match &n.party.vote {
-                None => String::from("Everyone votes! Press your choice."),
+                None => String::from("Everyone vote! Pick one."),
                 Some(v) => {
                     let mut s = match v.left {
                         Some(ms) => format!("Vote {}s:", ms.div_ceil(1000)),
-                        None => String::from("Vote (ENTER ends):"),
+                        None => String::from("Vote:"),
                     };
                     for k in &v.keys {
                         let c = v.votes.iter().filter(|(_, x)| x == k).count();
@@ -573,13 +574,14 @@ pub fn overlay(g: &Game, f: &mut Frame) {
                         .filter(|id| !v.votes.iter().any(|(i, _)| i == *id))
                         .count();
                     if waiting > 0 {
-                        s.push_str(&format!("  waiting for {waiting}"));
+                        s.push_str(&format!("  wait {waiting}"));
                     }
                     s
                 }
             };
-            f.rect(0, H - 22, W, 10, gfx::DARK_BLUE);
-            f.text(3, H - 21, &text, gfx::WHITE, Font::Small);
+            let text: String = text.chars().take(ui::FOOT_COLS).collect();
+            f.rect(0, H - 29, W, 15, gfx::DARK_BLUE);
+            f.text(3, H - 28, &text, gfx::WHITE, Font::Small);
         }
         _ => {}
     }
@@ -607,18 +609,18 @@ pub fn render_remote(g: &Game, f: &mut Frame) {
     let host = g.net.host.map_or_else(String::new, |h| g.net.name_of(h));
     if p.screen.got == 0 {
         ui::header(f, "Playing together");
-        f.text(
-            6,
-            30,
+        let y = ui::para(
+            f,
+            3,
+            ui::TOP,
             &format!("Waiting for {host}'s screen..."),
             gfx::YELLOW,
-            Font::Normal,
         );
         ui::para(
             f,
-            6,
-            50,
-            "Your keys go to the game once it shows. Press ` (backtick) any time for your own menu.",
+            3,
+            y + 4,
+            "Press ` any time for your own menu.",
             gfx::GRAY,
         );
         return;
@@ -629,13 +631,11 @@ pub fn render_remote(g: &Game, f: &mut Frame) {
         f.outline(1, 1, W - 2, H - 2, gfx::YELLOW);
     }
     if g.clock.wrapping_sub(p.seen) > LOST_MS {
-        f.label(
-            20,
+        f.banner(
             60,
             &format!("Lost touch with {host}..."),
             gfx::WHITE,
             gfx::RED,
-            Font::Normal,
         );
     }
 }

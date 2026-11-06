@@ -209,19 +209,28 @@ pub(crate) enum Scene {
     Title,
     Learn(usize),
     TopTen,
+    /// The Top Ten's second page, 6 to 10.
+    TopTenMore,
     Mood,
     Occupation,
-    Names { idx: usize, buf: String },
+    Names {
+        idx: usize,
+        buf: String,
+    },
     ConfirmNames,
     Month,
     Store(store::StoreState),
-    Travel { acc_ms: u32 },
+    Travel {
+        acc_ms: u32,
+    },
     SizeUp,
     Supplies,
     Map,
     Pace,
     Rations,
-    Rest { buf: String },
+    Rest {
+        buf: String,
+    },
     Trade(Option<travel::Offer>),
     River(river::RiverState),
     Dalles,
@@ -378,11 +387,18 @@ impl Game {
             (None, scene) => self.render_scene(f, scene),
         }
         if let Some((text, _)) = &self.toast {
-            let w = text.len() as i32 * 6 + 8;
+            let n = text.chars().count() as i32;
+            let font = if n * gfx::Font::Normal.char_w() + 8 <= gfx::W {
+                gfx::Font::Normal
+            } else {
+                gfx::Font::Small
+            };
+            let w = n * font.char_w() + 8;
+            let h = font.line_h() + 4;
             let x = (gfx::W - w) / 2;
-            f.rect(x, 2, w, 13, gfx::rgb(20, 60, 25));
-            f.outline(x, 2, w, 13, gfx::GREEN);
-            f.text(x + 4, 4, text, gfx::WHITE, gfx::Font::Normal);
+            f.rect(x, 1, w, h, gfx::rgb(20, 60, 25));
+            f.outline(x, 1, w, h, gfx::GREEN);
+            f.text(x + 4, 3, text, gfx::WHITE, font);
         }
         party::overlay(self, f);
         f.apply_theme(self.cheats.theme);
@@ -472,7 +488,9 @@ impl Game {
     /// Show a short note over the screen for a couple of seconds.
     pub fn notify(&mut self, text: impl Into<String>) {
         let mut text: String = text.into();
-        text.truncate(38);
+        if let Some((i, _)) = text.char_indices().nth(29) {
+            text.truncate(i);
+        }
         self.toast = Some((text, 2500));
     }
 
@@ -531,7 +549,8 @@ impl Game {
         match scene {
             Scene::Title => setup::title_key(self, k),
             Scene::Learn(p) => setup::learn_key(self, p, k),
-            Scene::TopTen => Scene::Title,
+            Scene::TopTen => Scene::TopTenMore,
+            Scene::TopTenMore => Scene::Title,
             Scene::Mood => setup::mood_key(self, k),
             Scene::Occupation => setup::occupation_key(self, k),
             Scene::Names { idx, buf } => setup::names_key(self, idx, buf, k),
@@ -578,7 +597,8 @@ impl Game {
         match scene {
             Scene::Title => setup::render_title(self, f),
             Scene::Learn(p) => setup::render_learn(self, f, *p),
-            Scene::TopTen => score::render_top_ten(self, f),
+            Scene::TopTen => score::render_top_ten(self, f, false),
+            Scene::TopTenMore => score::render_top_ten(self, f, true),
             Scene::Mood => setup::render_mood(self, f),
             Scene::Occupation => setup::render_occupation(self, f),
             Scene::Names { idx, buf } => setup::render_names(self, f, *idx, buf),
@@ -800,6 +820,193 @@ mod tests {
             g.render(&mut f);
             std::fs::write(std::format!("{dir}/{name}.bmp"), f.to_bmp()).unwrap();
         }
+    }
+
+    /// Robot trips render as they go: no text may run off the screen.
+    #[test]
+    fn text_fits_on_robot_trips() {
+        gfx::overflow::take();
+        for seed in 1..13 {
+            autoplay(seed, seed % 2 == 0);
+        }
+        let mut found = gfx::overflow::take();
+        found.sort();
+        found.dedup();
+        assert!(
+            found.is_empty(),
+            "text off the screen:\n{}",
+            found.join("\n")
+        );
+    }
+
+    /// `TRAIL_SHOTS=/some/dir cargo test -p trail-core gallery` saves every screen as a BMP,
+    /// to check that text fits after a layout or font change.
+    #[test]
+    fn gallery() {
+        let Ok(dir) = std::env::var("TRAIL_SHOTS") else {
+            return;
+        };
+        let mut f = Frame::new();
+        let mut shot = |g: &mut Game, name: &str| {
+            g.tick(16);
+            g.toast = None;
+            gfx::overflow::take();
+            g.render(&mut f);
+            for o in gfx::overflow::take() {
+                std::println!("OVERFLOW {name}: {o}");
+            }
+            std::fs::write(std::format!("{dir}/{name}.bmp"), f.to_bmp()).unwrap();
+        };
+        let mut g = Game::new(3);
+        for (name, scene) in [
+            ("00-title", Scene::Title),
+            ("01-learn0", Scene::Learn(0)),
+            ("02-learn1", Scene::Learn(1)),
+            ("03-topten", Scene::TopTen),
+            ("03-topten2", Scene::TopTenMore),
+            ("04-mood", Scene::Mood),
+            ("05-occupation", Scene::Occupation),
+            (
+                "06-names",
+                Scene::Names {
+                    idx: 1,
+                    buf: String::from("Elizabeth"),
+                },
+            ),
+            ("07-confirm", Scene::ConfirmNames),
+            ("08-month", Scene::Month),
+            ("09-store", Scene::Store(store::StoreState::new(false))),
+            ("10-slots", save::open(save::SlotMode::Load)),
+            ("11-games", Scene::Games(races::From::Title)),
+            ("12-online", Scene::Online(net::Screen::Offline)),
+            ("13-online-menu", Scene::Online(net::Screen::Menu)),
+        ] {
+            g.scene = scene;
+            shot(&mut g, name);
+        }
+        let mut g = start_trip(7);
+        g.t.miles = 700;
+        g.t.next = g
+            .data
+            .landmarks
+            .iter()
+            .position(|l| l.mile > 700)
+            .unwrap_or(1);
+        g.t.party[1].sick = Some((String::from("dysentery"), 2));
+        for (name, scene) in [
+            ("20-travel", Scene::Travel { acc_ms: 0 }),
+            ("21-sizeup", Scene::SizeUp),
+            ("22-supplies", Scene::Supplies),
+            ("23-map", Scene::Map),
+            ("24-pace", Scene::Pace),
+            ("25-rations", Scene::Rations),
+            (
+                "26-rest",
+                Scene::Rest {
+                    buf: String::from("3"),
+                },
+            ),
+            ("27-trade", Scene::Trade(None)),
+            ("28-dalles", Scene::Dalles),
+            ("29-store-fort", Scene::Store(store::StoreState::new(true))),
+            ("30-games-trail", Scene::Games(races::From::Trail)),
+            ("31-gameover", Scene::GameOver),
+            ("32-save", save::open(save::SlotMode::Save)),
+        ] {
+            g.scene = scene;
+            shot(&mut g, name);
+        }
+        let s = river::RiverState::new(&mut g, 3);
+        g.scene = Scene::River(s);
+        shot(&mut g, "40-river");
+        let s = hunt::HuntState::new(&mut g);
+        g.scene = Scene::Hunt(Box::new(s));
+        shot(&mut g, "41-hunt");
+        g.scene = Scene::Fish(Box::default());
+        shot(&mut g, "42-fish");
+        g.scene = forage::start(&mut g);
+        shot(&mut g, "43-forage");
+        g.msgs.clear();
+        let s = raft::RaftState::new(&mut g);
+        g.scene = Scene::Raft(Box::new(s));
+        shot(&mut g, "44-raft");
+        for (i, kind) in [races::Kind::Wagon, races::Kind::Foot, races::Kind::Sled]
+            .into_iter()
+            .enumerate()
+        {
+            let s = races::RaceState::new(&g, kind, races::From::Trail);
+            g.scene = Scene::Race(Box::new(s));
+            shot(&mut g, &std::format!("45-race{i}"));
+        }
+        let mut h = Game::new(5);
+        net::fake_crowd(&mut h, 8);
+        for (name, screen) in [
+            ("60-net-offline", net::Screen::Offline),
+            ("61-net-hotspot", net::Screen::Hotspot),
+            (
+                "62-net-join",
+                net::Screen::JoinWifi {
+                    fields: [
+                        String::from("HomeWifi"),
+                        String::from("secret"),
+                        String::new(),
+                    ],
+                    field: 2,
+                },
+            ),
+            ("63-net-connecting", net::Screen::Connecting),
+            ("64-net-name", net::Screen::Name(String::from("Elizabeth"))),
+            ("65-net-menu", net::Screen::Menu),
+            ("66-net-setup", net::Screen::Setup),
+            ("67-net-waiting", net::Screen::Waiting),
+            ("68-net-standings", net::Screen::Standings { last: false }),
+            ("69-net-give", net::Screen::Give(None)),
+            ("70-net-give2", net::Screen::Give(Some(2))),
+            ("71-net-remotemenu", net::Screen::RemoteMenu),
+            (
+                "72-net-hunt",
+                net::Screen::HuntResults(std::vec![(1, 300), (2, 120), (3, 45)]),
+            ),
+            ("73-net-message", net::Screen::Message),
+        ] {
+            h.scene = Scene::Online(screen);
+            shot(&mut h, name);
+        }
+        h.scene = terminal::open(Scene::Title);
+        if let Scene::Terminal(t) = core::mem::replace(&mut h.scene, Scene::Title) {
+            let mut sc = Scene::Terminal(t);
+            for k in "help".chars().map(Key::Char).chain([Key::Enter]) {
+                if let Scene::Terminal(t) = sc {
+                    sc = terminal::key(&mut h, t, k);
+                }
+            }
+            h.scene = sc;
+        }
+        shot(&mut h, "74-terminal");
+        let mut k = start_trip(9);
+        k.key_down(Key::Char('s'));
+        k.key_down(Key::Char('2'));
+        k.take_saves();
+        k.scene = save::open(save::SlotMode::Load);
+        shot(&mut k, "75-slots-saved");
+
+        g.scene = Scene::SizeUp;
+        g.say("Independence Rock", "You have reached Independence Rock. Pioneers carve their names here. It is a big gray rock in the middle of the prairie, and travelers hope to reach it by the Fourth of July so they stay ahead of the snow.");
+        shot(&mut g, "50-msg");
+        g.msgs.clear();
+        let lm = g.t.next;
+        g.say_pic(
+            "Fort Laramie",
+            "You are at Fort Laramie. It is a busy fort.",
+            Pic::Landmark(lm),
+        );
+        shot(&mut g, "51-msg-pic");
+        g.msgs.clear();
+        g.scene = Scene::Score(std::vec![
+            (String::from("Arrived healthy"), 500),
+            (String::from("Wagon"), 50)
+        ]);
+        shot(&mut g, "52-score");
     }
 
     #[test]

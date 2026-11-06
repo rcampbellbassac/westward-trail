@@ -45,7 +45,7 @@ pub const MESSAGES: [&str; 8] = [
     "Need food!",
     "Need oxen!",
     "Wait for me!",
-    "Watch out for the river!",
+    "Beware the river!",
     "Good luck!",
     "Help!",
     "Woo-hoo!",
@@ -88,7 +88,7 @@ impl Mode {
             Mode::Race => "Wagon race",
             Mode::Train => "Wagon train",
             Mode::Democracy => "Democracy",
-            Mode::Shared => "One wagon, many drivers",
+            Mode::Shared => "Take turns",
             Mode::Hunt => "Hunt together",
             Mode::Races => "Fun races",
         }
@@ -114,24 +114,12 @@ impl Mode {
 
     fn about(self) -> &'static str {
         match self {
-            Mode::Race => {
-                "Everyone drives their own wagon with the same luck. First to Oregon wins."
-            }
-            Mode::Train => {
-                "Everyone drives their own wagon, and wagons close together can give each other supplies."
-            }
-            Mode::Democracy => {
-                "One wagon. Each player is a party member, and the party votes on every choice."
-            }
-            Mode::Shared => {
-                "One wagon. Players take turns driving: the turn passes each time the wagon sets off."
-            }
-            Mode::Hunt => {
-                "Everyone hunts in the same field at once. Who brings back the most meat?"
-            }
-            Mode::Races => {
-                "Wagon, foot and sled races for up to 4 players. Computer racers fill the empty spots."
-            }
+            Mode::Race => "Own wagons, same luck. First to Oregon wins.",
+            Mode::Train => "Own wagons. Wagons close together can share.",
+            Mode::Democracy => "One wagon. The party votes on every choice.",
+            Mode::Shared => "One wagon. A new driver each time it sets off.",
+            Mode::Hunt => "Everyone hunts in one field. Who gets the most meat?",
+            Mode::Races => "Races for up to 4. The computer fills empty spots.",
         }
     }
 
@@ -727,12 +715,12 @@ pub const NEAR: u32 = 50;
 
 /// What one wagon can give another: (menu text, name in the note, amount).
 const GIFTS: [(&str, &str, u32); 6] = [
-    ("50 pounds of food", "pounds of food", 50),
+    ("50 lbs of food", "pounds of food", 50),
     ("1 ox", "ox", 1),
     ("20 bullets", "bullets", 20),
-    ("1 set of clothing", "set of clothing", 1),
-    ("1 wagon wheel", "wagon wheel", 1),
-    ("1 wagon axle", "wagon axle", 1),
+    ("1 clothing", "set of clothing", 1),
+    ("1 wheel", "wagon wheel", 1),
+    ("1 axle", "wagon axle", 1),
 ];
 
 fn gift_stock(g: &mut Game, item: usize) -> &mut u32 {
@@ -1079,37 +1067,27 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
     match s {
         Screen::Offline if n.caps.host || n.caps.join => {
             ui::header(f, "Play together");
-            let mut y = 18;
+            let mut y = ui::TOP;
             if n.caps.host {
-                f.text(
-                    6,
-                    y,
-                    "1. Host a game on this Cardputer",
-                    gfx::WHITE,
-                    Font::Normal,
-                );
-                y += 12;
+                f.text(3, y, "1. Host a game", gfx::WHITE, Font::Normal);
+                y += ui::LINE;
             }
             if n.caps.join {
-                f.text(6, y, "2. Join a game on Wi-Fi", gfx::WHITE, Font::Normal);
-                y += 12;
+                f.text(3, y, "2. Join on Wi-Fi", gfx::WHITE, Font::Normal);
+                y += ui::LINE;
                 if !n.caps.saved_ssid.is_empty() {
-                    f.text(
-                        6,
-                        y,
-                        &format!("3. Join {} again", n.caps.saved_ssid),
-                        gfx::WHITE,
-                        Font::Normal,
-                    );
-                    y += 12;
+                    let again: String = format!("3. Join {}", n.caps.saved_ssid)
+                        .chars()
+                        .take(ui::FOOT_COLS)
+                        .collect();
+                    f.text(3, y, &again, gfx::WHITE, Font::fit(&again, W - 4));
+                    y += ui::LINE;
                 }
             }
-            ui::para(
+            small_para(
                 f,
-                3,
-                y + 8,
-                "Hosting makes a Wi-Fi hotspot. Phones and computers join it and play in a web browser, no internet needed.",
-                gfx::GRAY,
+                y + 4,
+                "Hosting makes a Wi-Fi hotspot. Phones join it and play in a web browser.",
             );
             ui::footer(f, "Pick one.  ESC: back");
         }
@@ -1117,7 +1095,7 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
             ui::header(f, "Host a game");
             match &n.host_info {
                 None => {
-                    f.text(6, 30, &n.status, gfx::YELLOW, Font::Normal);
+                    ui::para(f, 3, ui::TOP, &n.status, gfx::YELLOW);
                 }
                 Some(h) => {
                     let mut x0 = 4;
@@ -1125,74 +1103,78 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                         // Three pixels per module, with a white border for phone cameras.
                         let px = 3;
                         let side = (h.qr_size as i32 + 4) * px;
-                        f.rect(2, 14, side, side, gfx::WHITE);
+                        f.rect(2, 19, side, side, gfx::WHITE);
                         for (i, dark) in h.qr.iter().enumerate() {
                             if *dark {
                                 let (mx, my) = ((i % h.qr_size) as i32, (i / h.qr_size) as i32);
-                                f.rect(2 + (mx + 2) * px, 14 + (my + 2) * px, px, px, gfx::BLACK);
+                                f.rect(2 + (mx + 2) * px, 19 + (my + 2) * px, px, px, gfx::BLACK);
                             }
                         }
-                        x0 = side + 8;
+                        x0 = side + 6;
                     }
                     let rows = [
                         ("Wi-Fi:", h.ssid.as_str()),
                         ("Password:", h.password.as_str()),
                         ("Then open:", h.address.as_str()),
                     ];
-                    let mut y = 16;
+                    let room = W - x0 - 1;
+                    let cols = (room / Font::Small.char_w()).max(1) as usize;
+                    let mut y = ui::HEAD_H + 1;
                     for (label, value) in rows {
                         f.text(x0, y, label, gfx::GRAY, Font::Small);
-                        f.text(x0, y + 9, value, gfx::YELLOW, Font::Normal);
-                        y += 24;
+                        y += 12;
+                        let value = value.trim_start_matches("http://").trim_end_matches('/');
+                        if Font::fit(value, room) == Font::Normal {
+                            f.text(x0, y, value, gfx::YELLOW, Font::Normal);
+                            y += 16;
+                        } else {
+                            // Too long for big letters: small ones, on two lines if need be.
+                            let chars: Vec<char> = value.chars().collect();
+                            for chunk in chars.chunks(cols).take(2) {
+                                let line: String = chunk.iter().collect();
+                                f.text(x0, y, &line, gfx::YELLOW, Font::Small);
+                                y += 12;
+                            }
+                        }
                     }
-                    f.text(x0, y, "Scan to join with a phone.", gfx::GRAY, Font::Small);
-                    // Who has joined so far, or what went wrong.
-                    f.text(x0, y + 12, &n.status, gfx::GREEN, Font::Small);
+                    let _ = y;
                 }
             }
-            let footer = if n.online {
-                "ENTER: continue  ESC: back"
+            if n.online {
+                ui::footer(f, "ENTER: continue  ESC: back");
+            } else if !n.status.is_empty() && n.host_info.is_some() {
+                // Who has joined so far, or what went wrong.
+                let status: String = n.status.chars().take(ui::FOOT_COLS).collect();
+                f.text(3, ui::FOOTER_Y, &status, gfx::GREEN, Font::Small);
             } else {
-                "ESC: back"
-            };
-            ui::footer(f, footer);
+                ui::footer(f, "ESC: back");
+            }
         }
         Screen::JoinWifi { fields, field } => {
             ui::header(f, "Join a game on Wi-Fi");
             let cursor = if (g.clock / 400) % 2 == 0 { "_" } else { " " };
             let hotspot = fields[0].starts_with(HOTSPOT_PREFIX);
-            let labels = ["Wi-Fi name:", "Password:", "Relay address (blank: search):"];
+            let labels = ["Wi-Fi name:", "Password:", "Relay address (or blank):"];
             let shown = if hotspot { 2 } else { 3 };
             for i in 0..shown.min(*field + 1) {
-                let y = 16 + i as i32 * 24;
-                f.text(6, y, labels[i], gfx::GRAY, Font::Small);
+                let y = ui::HEAD_H + 2 + i as i32 * 29;
+                f.text(3, y, labels[i], gfx::GRAY, Font::Small);
                 let c = if i == *field { cursor } else { "" };
-                f.text(
-                    12,
-                    y + 9,
-                    &format!("{}{c}", fields[i]),
-                    gfx::YELLOW,
-                    Font::Normal,
-                );
+                let value = format!("{}{c}", fields[i]);
+                f.text(9, y + 12, &value, gfx::YELLOW, Font::fit(&value, W - 10));
             }
             let help = if hotspot {
-                "A Cardputer's game is called WestwardTrail-something."
+                "Cardputers: WestwardTrail-..."
             } else {
-                "On home Wi-Fi, type the address of the computer running trail-relay, or leave it blank to search."
+                "Blank: search for the relay"
             };
-            ui::para(f, 3, 90, help, gfx::GRAY);
-            ui::footer(f, "Type, then ENTER.  Up: back a step");
+            f.text(3, 108, help, gfx::GRAY, Font::Small);
+            ui::footer(f, "Type, ENTER.  UP: back");
         }
         Screen::Connecting => {
             ui::header(f, "Play together");
             let dots = ".".repeat(((g.clock / 400) % 4) as usize);
-            f.text(
-                6,
-                30,
-                &format!("{}{dots}", n.status),
-                gfx::YELLOW,
-                Font::Normal,
-            );
+            ui::para(f, 3, ui::TOP, &format!("{}{dots}", n.status), gfx::YELLOW);
             let footer = if n.online {
                 "Connected! ENTER: continue"
             } else {
@@ -1206,56 +1188,53 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 f,
                 3,
                 18,
-                "To play together, everyone opens the game from the same Westward Trail host: the home relay, or (coming soon) a Cardputer hosting a game. This copy of the game isn't connected to one.",
+                "To play together, open the game from a Westward Trail host, like the home relay.",
                 gfx::WHITE,
             );
             ui::footer(f, "Press any key.");
         }
         Screen::Name(buf) => {
             ui::header(f, "Play together");
-            f.text(3, 20, "What's your name?", gfx::WHITE, Font::Normal);
+            f.text(3, ui::TOP, "What's your name?", gfx::WHITE, Font::Normal);
             let cursor = if (g.clock / 400) % 2 == 0 { "_" } else { " " };
-            f.text(12, 40, &format!("{buf}{cursor}"), gfx::YELLOW, Font::Bold);
-            ui::footer(f, "Type a name, ENTER. (ENTER alone picks one.)");
+            f.text(12, 44, &format!("{buf}{cursor}"), gfx::YELLOW, Font::Bold);
+            ui::footer(f, "Type, ENTER. Just ENTER: pick");
         }
         Screen::Menu => {
             ui::header(f, &format!("Play together, {}", n.name));
-            f.text(6, 18, "1. Host a new game", gfx::WHITE, Font::Normal);
+            f.text(3, ui::TOP, "1. Host a new game", gfx::WHITE, Font::Normal);
             if n.lobbies.is_empty() {
                 f.text(
-                    6,
-                    34,
-                    "Looking for games to join...",
+                    3,
+                    ui::TOP + ui::LINE,
+                    "Looking for games...",
                     gfx::GRAY,
                     Font::Normal,
                 );
             }
-            for (i, l) in n.lobbies.iter().take(7).enumerate() {
-                f.text(
-                    6,
-                    34 + i as i32 * 11,
-                    &format!(
-                        "{}. Join {} - {}, {}/{}",
-                        i + 2,
-                        l.name,
-                        l.mode.name(),
-                        l.players,
-                        l.mode.max_players()
-                    ),
-                    gfx::YELLOW,
-                    Font::Normal,
+            for (i, l) in n.lobbies.iter().take(5).enumerate() {
+                let line = format!(
+                    "{}. {}: {} {}/{}",
+                    i + 2,
+                    l.name,
+                    l.mode.name(),
+                    l.players,
+                    l.mode.max_players()
                 );
+                let line: String = line.chars().take(ui::FOOT_COLS).collect();
+                let y = ui::TOP + (i as i32 + 1) * ui::LINE;
+                f.text(3, y, &line, gfx::YELLOW, Font::fit(&line, W - 4));
             }
-            ui::footer(f, "Number to pick.  N: change name  ESC: back");
+            ui::footer(f, "N: change name  ESC: back");
         }
         Screen::Setup => {
             ui::header(f, "Host a game");
             let st = &n.settings;
             let mode = String::from(st.mode.name());
             let timer = if st.vote_secs == 0 {
-                String::from("no timer")
+                String::from("none")
             } else {
-                format!("{} seconds", st.vote_secs)
+                format!("{} sec", st.vote_secs)
             };
             let rows = [
                 format!("1. Game: {mode}"),
@@ -1265,7 +1244,7 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 ),
                 format!("3. Leave in: {}", setup::MONTH_NAMES[st.month as usize - 1]),
                 format!("4. Cheats: {}", on_off(st.cheats)),
-                format!("5. Vote timer: {timer}"),
+                format!("5. Timer: {timer}"),
             ];
             for (i, r) in rows.iter().enumerate() {
                 let c = if i == 4 && st.mode != Mode::Democracy {
@@ -1273,17 +1252,10 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 } else {
                     gfx::WHITE
                 };
-                f.text(6, 18 + i as i32 * 12, r, c, Font::Normal);
+                f.text(3, ui::HEAD_H + 2 + i as i32 * 14, r, c, Font::Normal);
             }
-            ui::para(f, 6, 80, st.mode.about(), gfx::GRAY);
-            f.text(
-                6,
-                114,
-                "Press a number to change it.",
-                gfx::GRAY,
-                Font::Small,
-            );
-            ui::footer(f, "ENTER: open the game  ESC: back");
+            small_para(f, 92, st.mode.about());
+            ui::footer(f, "Number: change. ENTER: go");
         }
         Screen::Waiting => {
             let host = n.host.map_or_else(String::new, |h| n.name_of(h));
@@ -1296,28 +1268,31 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
             let st = &n.settings;
             f.text(
                 3,
-                15,
-                &format!("{}   cheats {}", st.mode.name(), on_off(st.cheats)),
+                ui::HEAD_H + 2,
+                &format!("{}, cheats {}", st.mode.name(), on_off(st.cheats)),
                 gfx::GRAY,
                 Font::Small,
             );
+            // Two columns of four; you are the one with a star.
             for (i, p) in n.players.iter().enumerate() {
-                let y = 26 + i as i32 * 11;
-                f.rect(8, y + 2, 6, 6, COLORS[i % MAX_PLAYERS]);
-                let you = if p.id == n.me { " (you)" } else { "" };
-                f.text(20, y, &format!("{}{you}", p.name), gfx::WHITE, Font::Normal);
+                let x = if i < 4 { 3 } else { 123 };
+                let y = 38 + (i % 4) as i32 * ui::LINE;
+                f.rect(x, y + 4, 8, 8, COLORS[i % MAX_PLAYERS]);
+                let you = if p.id == n.me { "*" } else { "" };
+                let name: String = p.name.chars().take(9).collect();
+                f.text(x + 11, y, &format!("{name}{you}"), gfx::WHITE, Font::Normal);
             }
             if n.players.is_empty() {
-                f.text(8, 28, "Asking to join...", gfx::GRAY, Font::Normal);
+                f.text(3, 38, "Asking to join...", gfx::GRAY, Font::Normal);
             }
             let footer = if n.hosting() {
                 format!(
-                    "ENTER: start ({}/{})  ESC: close",
+                    "ENTER: start {}/{}  ESC: close",
                     n.players.len(),
                     st.mode.max_players()
                 )
             } else {
-                String::from("Waiting for the host to start. ESC: leave")
+                String::from("Waiting for host. ESC: leave")
             };
             ui::footer(f, &footer);
         }
@@ -1336,64 +1311,53 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
                 PeerState::Out => (2, u32::MAX - p.miles),
                 _ => (1, u32::MAX - p.miles),
             });
+            let (font, step) = rows_for(order.len());
             for (i, p) in order.iter().enumerate() {
-                let y = 15 + i as i32 * 12;
-                f.rect(4, y + 2, 6, 6, n.color(p.id));
+                let y = ui::HEAD_H + 2 + i as i32 * step;
+                f.rect(3, y + 3, 7, 7, n.color(p.id));
                 let lost = p.id != n.me && n.clock.wrapping_sub(p.seen) > LOST_MS;
                 let status = match p.state {
-                    PeerState::Done(points) => format!("in Oregon, {points} pts"),
-                    PeerState::Out => String::from("out of the race"),
-                    _ if lost => format!("{} mi (lost)", p.miles),
-                    _ => format!("{} mi, {} in party", p.miles, p.alive),
+                    PeerState::Done(points) => format!("Oregon {points}"),
+                    PeerState::Out => String::from("out"),
+                    _ if lost => format!("{} mi lost", p.miles),
+                    _ => format!("{} mi {} left", p.miles, p.alive),
                 };
                 let you = if p.id == n.me { "*" } else { "" };
-                f.text(
-                    14,
-                    y,
-                    &format!("{}. {}{you}", i + 1, p.name),
-                    gfx::WHITE,
-                    Font::Normal,
-                );
-                f.text(118, y, &status, gfx::YELLOW, Font::Small);
+                let name: String = p.name.chars().take(8).collect();
+                f.text(13, y, &format!("{name}{you}"), gfx::WHITE, font);
+                let w = status.chars().count() as i32 * Font::Small.char_w();
+                f.text(W - 2 - w, y + 1, &status, gfx::YELLOW, Font::Small);
             }
             let footer = if *last {
                 "Press any key."
             } else if n.settings.mode == Mode::Train {
-                "M: message  G: give supplies  Other: back"
+                "M: talk  G: give  Other: back"
             } else {
-                "M: send a message   Any key: back"
+                "M: message  Other: back"
             };
             ui::footer(f, footer);
         }
         Screen::Give(None) => {
             ui::header(f, "Give supplies to...");
-            let mut y = 16;
+            let others = n.players.iter().filter(|p| p.id != n.me).count();
+            let (font, step) = rows_for(others + 1);
+            let mut y = ui::HEAD_H + 2;
             for (i, p) in n.players.iter().filter(|p| p.id != n.me).enumerate() {
                 let far = p.miles.abs_diff(g.t.miles);
                 let (note, c) = match p.state {
                     PeerState::Done(_) => (String::from("in Oregon"), gfx::GRAY),
                     PeerState::Out => (String::from("trip over"), gfx::GRAY),
-                    _ if far <= NEAR => (format!("{far} miles away"), gfx::GREEN),
-                    _ => (format!("{far} miles: too far"), gfx::GRAY),
+                    _ if far <= NEAR => (format!("{far} mi away"), gfx::GREEN),
+                    _ => (String::from("too far"), gfx::GRAY),
                 };
-                f.rect(6, y + 2, 6, 6, n.color(p.id));
-                f.text(
-                    16,
-                    y,
-                    &format!("{}. {}", i + 1, p.name),
-                    gfx::WHITE,
-                    Font::Normal,
-                );
-                f.text(130, y + 1, &note, c, Font::Small);
-                y += 12;
+                f.rect(3, y + 3, 7, 7, n.color(p.id));
+                let name: String = p.name.chars().take(8).collect();
+                f.text(13, y, &format!("{}. {name}", i + 1), gfx::WHITE, font);
+                let w = note.chars().count() as i32 * Font::Small.char_w();
+                f.text(W - 2 - w, y + 1, &note, c, Font::Small);
+                y += step;
             }
-            ui::para(
-                f,
-                6,
-                y + 4,
-                "Wagons within 50 miles of each other can share. Positions update every few seconds.",
-                gfx::GRAY,
-            );
+            small_para(f, y + 2, "Wagons within 50 miles can share.");
             ui::footer(f, "Pick a wagon.  ESC: back");
         }
         Screen::Give(Some(to)) => {
@@ -1401,72 +1365,63 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
             let s = &g.t.sup;
             let have = [s.food, s.oxen, s.ammo, s.clothing, s.wheels, s.axles];
             for (i, (what, _, _)) in GIFTS.iter().enumerate() {
-                let y = 16 + i as i32 * 12;
+                let y = ui::HEAD_H + 2 + i as i32 * ui::LINE;
                 f.text(
-                    6,
+                    3,
                     y,
                     &format!("{}. {what}", i + 1),
                     gfx::WHITE,
                     Font::Normal,
                 );
+                let have = format!("{}", have[i]);
                 f.text(
-                    150,
-                    y + 1,
-                    &format!("you have {}", have[i]),
+                    W - 3 - have.len() as i32 * 10,
+                    y,
+                    &have,
                     gfx::GRAY,
-                    Font::Small,
+                    Font::Normal,
                 );
             }
-            ui::footer(f, "Pick something to give.  ESC: back");
+            ui::footer(f, "Pick a gift.  ESC: back");
         }
         Screen::Remote => crate::party::render_remote(g, f),
         Screen::RemoteMenu => {
             ui::header(f, "Your menu");
-            ui::menu(
+            let y = ui::menu(
                 f,
-                6,
-                20,
+                3,
+                ui::TOP,
                 &["Back to the game", "Send a message", "Leave the game"],
             );
             let host = n.host.map_or_else(String::new, |h| n.name_of(h));
             ui::para(
                 f,
-                6,
-                64,
+                3,
+                y + 4,
                 &format!(
                     "You're playing {}, hosted by {host}.",
                     n.settings.mode.name()
                 ),
                 gfx::GRAY,
             );
-            ui::footer(f, "Pick one.");
         }
         Screen::HuntResults(results) => {
-            ui::header(f, "The hunt is over!");
+            let total: u32 = results.iter().map(|(_, lbs)| lbs).sum();
+            ui::header(f, &format!("Hunt over: {total} lbs"));
             let mut order: Vec<&(u32, u32)> = results.iter().collect();
             order.sort_by_key(|(_, lbs)| u32::MAX - lbs);
-            let total: u32 = results.iter().map(|(_, lbs)| lbs).sum();
+            let (font, step) = rows_for(order.len());
             for (i, (id, lbs)) in order.iter().enumerate() {
-                let y = 16 + i as i32 * 12;
-                f.rect(6, y + 2, 6, 6, n.color(*id));
-                f.text(
-                    16,
-                    y,
-                    &format!("{}. {}", i + 1, n.name_of(*id)),
-                    gfx::WHITE,
-                    Font::Normal,
-                );
-                f.text(150, y, &format!("{lbs} lbs"), gfx::YELLOW, Font::Normal);
+                let y = ui::HEAD_H + 2 + i as i32 * step;
+                f.rect(3, y + 3, 7, 7, n.color(*id));
+                let name: String = n.name_of(*id).chars().take(10).collect();
+                f.text(13, y, &format!("{}. {name}", i + 1), gfx::WHITE, font);
+                let lbs = format!("{lbs} lbs");
+                let w = lbs.len() as i32 * font.char_w();
+                f.text(W - 3 - w, y, &lbs, gfx::YELLOW, font);
             }
-            f.text(
-                6,
-                112,
-                &format!("Everyone together: {total} pounds of meat"),
-                gfx::GREEN,
-                Font::Small,
-            );
             let footer = if n.hosting() {
-                "ENTER: hunt again  ESC: finish"
+                "ENTER: again  ESC: finish"
             } else {
                 "Waiting for the host..."
             };
@@ -1474,17 +1429,94 @@ pub fn render(g: &Game, f: &mut Frame, s: &Screen) {
         }
         Screen::Message => {
             ui::header(f, "Send a message");
+            // Eight of them: rows a little closer, and no room for a footer.
             for (i, m) in MESSAGES.iter().enumerate() {
                 f.text(
-                    6,
-                    15 + i as i32 * 12,
+                    3,
+                    ui::HEAD_H + 2 + i as i32 * 14,
                     &format!("{}. {m}", i + 1),
                     gfx::WHITE,
                     Font::Normal,
                 );
             }
-            ui::footer(f, "Pick one.  ESC: back");
         }
+    }
+}
+
+/// Tests: a full house of players and games to join, to look at the screens.
+#[cfg(test)]
+pub(crate) fn fake_crowd(g: &mut Game, n: usize) {
+    let names = [
+        "Elizabeth",
+        "Amos",
+        "Cyrus",
+        "Nell",
+        "Sarah",
+        "Ada",
+        "Eli",
+        "Clara",
+    ];
+    let clock = g.net.clock;
+    g.net.players = (0..n)
+        .map(|i| Peer {
+            id: i as u32 + 1,
+            name: String::from(names[i % names.len()]),
+            miles: 1999 - i as u32 * 250,
+            day: 0,
+            alive: 5,
+            state: match i {
+                0 => PeerState::Done(12345),
+                1 => PeerState::Out,
+                _ => PeerState::Racing,
+            },
+            seen: clock,
+        })
+        .collect();
+    g.net.me = 1;
+    g.net.host = Some(1);
+    g.net.lobbies = (0..6)
+        .map(|i| Lobby {
+            host: 10 + i,
+            name: String::from(names[i as usize]),
+            mode: [Mode::Race, Mode::Shared, Mode::Democracy][i as usize % 3],
+            players: 3,
+            cheats: false,
+            seen: clock,
+        })
+        .collect();
+    g.net.caps = Caps {
+        host: true,
+        join: true,
+        saved_ssid: String::from("WestwardTrail-K7Q2"),
+        saved_relay: String::new(),
+    };
+    g.net.status = String::from("Ann and Bob joined");
+    g.net.host_info = Some(HostInfo {
+        ssid: String::from("WestwardTrail-K7Q2"),
+        password: String::from("oxen-1848"),
+        address: String::from("http://192.168.4.1/"),
+        qr: alloc::vec![true; 29 * 29],
+        qr_size: 29,
+    });
+}
+
+/// Normal letters for up to six rows of players, small ones for more.
+fn rows_for(n: usize) -> (Font, i32) {
+    if n <= 6 {
+        (Font::Normal, ui::LINE)
+    } else {
+        (Font::Small, 12)
+    }
+}
+
+/// A paragraph of small gray letters, for notes that would not fit in big ones.
+fn small_para(f: &mut Frame, mut y: i32, text: &str) {
+    for line in gfx::wrap(text, ui::FOOT_COLS) {
+        if y + Font::Small.line_h() > ui::FOOTER_Y {
+            break;
+        }
+        f.text(3, y, &line, gfx::GRAY, Font::Small);
+        y += 12;
     }
 }
 

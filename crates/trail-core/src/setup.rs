@@ -29,31 +29,33 @@ pub fn render_title(g: &Game, f: &mut Frame) {
         let twinkle = (g.clock / 300 + i as u32) % 7 == 0;
         f.pixel(x, y, if twinkle { gfx::YELLOW } else { gfx::WHITE });
     }
-    let font = if g.data.title.len() * 10 <= 236 {
+    let n = g.data.title.chars().count() as i32;
+    let font = if n * Font::Big.char_w() <= W - 4 {
         Font::Big
+    } else if n * Font::Normal.char_w() <= W - 4 {
+        Font::Normal
     } else {
-        Font::Bold
+        Font::Small
     };
-    f.text_center(8, &g.data.title, gfx::YELLOW, font);
-    f.rect(0, 92, W, 43, gfx::rgb(90, 150, 60));
-    pictures::mountain(f, 40, 70, 92, 40, gfx::rgb(70, 70, 110), true);
-    pictures::mountain(f, 200, 60, 92, 50, gfx::rgb(80, 80, 120), true);
+    f.text_center(3, &g.data.title, gfx::YELLOW, font);
+    f.rect(0, 112, W, 23, gfx::rgb(90, 150, 60));
+    pictures::mountain(f, 30, 70, 112, 40, gfx::rgb(70, 70, 110), true);
+    pictures::mountain(f, 215, 60, 112, 50, gfx::rgb(80, 80, 120), true);
     let x = W - ((g.clock / 40) as i32 % (W + 60));
-    pictures::team(f, x, 82, (g.clock / 250) as usize);
+    pictures::team(f, x, 102, (g.clock / 250) as usize);
     ui::menu(
         f,
-        50,
-        36,
+        12,
+        29,
         &[
             "Travel the trail",
-            "Learn about the trail",
+            "Learn the trail",
             "See the Top Ten",
             "Load a saved trip",
             "Play together",
             "Fun and games",
         ],
     );
-    f.text(3, 126, "v0.1", gfx::rgb(60, 100, 40), Font::Small);
 }
 
 /// The opening of "Oh! Susanna" (Stephen Foster, 1848: the year of our trip).
@@ -121,17 +123,32 @@ pub fn title_key(g: &mut Game, k: Key) -> Scene {
     }
 }
 
+/// The learn-about-the-trail text, cut into screens of big letters.
+fn learn_pages() -> Vec<Vec<String>> {
+    let mut pages = Vec::new();
+    for text in LEARN {
+        let lines = gfx::wrap(text, ui::COLS);
+        for chunk in lines.chunks(ui::ROWS) {
+            pages.push(chunk.to_vec());
+        }
+    }
+    pages
+}
+
 pub fn render_learn(_g: &Game, f: &mut Frame, page: usize) {
-    ui::header(
-        f,
-        &format!("Learn about the trail  {}/{}", page + 1, LEARN.len()),
-    );
-    ui::para(f, 3, 18, LEARN[page.min(LEARN.len() - 1)], gfx::WHITE);
-    ui::footer(f, "ENTER: next page   ESC: back to title");
+    let pages = learn_pages();
+    let page = page.min(pages.len() - 1);
+    ui::header(f, &format!("Learn the trail {}/{}", page + 1, pages.len()));
+    let mut y = ui::TOP;
+    for line in &pages[page] {
+        f.text(3, y, line, gfx::WHITE, Font::Normal);
+        y += ui::LINE;
+    }
+    ui::footer(f, "ENTER: next   ESC: back");
 }
 
 pub fn learn_key(_g: &mut Game, page: usize, k: Key) -> Scene {
-    if k == Key::Escape || page + 1 >= LEARN.len() {
+    if k == Key::Escape || page + 1 >= learn_pages().len() {
         Scene::Title
     } else {
         Scene::Learn(page + 1)
@@ -139,15 +156,9 @@ pub fn learn_key(_g: &mut Game, page: usize, k: Key) -> Scene {
 }
 
 pub fn render_mood(_g: &Game, f: &mut Frame) {
-    ui::header(f, "Who is going west today?");
-    ui::menu(f, 3, 20, &["Younger pioneers", "Seasoned pioneers"]);
-    ui::para(
-        f,
-        3,
-        48,
-        "Younger: gentle trail. Nobody dies; sick folks get a ride home to rest.",
-        gfx::GRAY,
-    );
+    ui::header(f, "Who is going west?");
+    ui::menu(f, 3, ui::TOP, &["Younger pioneers", "Seasoned pioneers"]);
+    ui::para(f, 3, 58, "Younger: nobody dies.", gfx::GRAY);
     ui::para(
         f,
         3,
@@ -178,16 +189,10 @@ pub fn mood_key(g: &mut Game, k: Key) -> Scene {
 
 pub fn render_occupation(g: &Game, f: &mut Frame) {
     ui::header(f, "Choose who you are");
-    ui::para(
-        f,
-        3,
-        16,
-        "Many kinds of people made the trip to Oregon. You may be a:",
-        gfx::GRAY,
-    );
+    ui::para(f, 3, ui::TOP, "You may be a:", gfx::GRAY);
     let mut items: Vec<&str> = g.data.occupations.iter().map(|o| o.name.as_str()).collect();
-    items.push("Find out the differences");
-    ui::menu(f, 3, 42, &items);
+    items.push("What's different?");
+    ui::menu(f, 3, ui::TOP + ui::LINE + 6, &items);
 }
 
 pub fn occupation_key(g: &mut Game, k: Key) -> Scene {
@@ -221,12 +226,14 @@ pub fn occupation_key(g: &mut Game, k: Key) -> Scene {
 pub fn render_names(g: &Game, f: &mut Frame, idx: usize, buf: &str) {
     ui::header(f, "Your wagon party");
     let q = if idx == 0 {
-        "What is the first name of the wagon leader?"
+        "Name the wagon leader:"
     } else {
-        "What are the first names of the four other people in your party?"
+        "Name the other four:"
     };
-    let mut y = ui::para(f, 3, 16, q, gfx::GRAY) + 4;
-    for (i, p) in g.t.party.iter().enumerate() {
+    let mut y = ui::para(f, 3, ui::TOP, q, gfx::GRAY) + 2;
+    // Only the last few names fit above the one being typed.
+    let shown = g.t.party.len().min(4);
+    for (i, p) in g.t.party.iter().enumerate().skip(g.t.party.len() - shown) {
         f.text(
             12,
             y,
@@ -234,7 +241,7 @@ pub fn render_names(g: &Game, f: &mut Frame, idx: usize, buf: &str) {
             gfx::WHITE,
             Font::Normal,
         );
-        y += 10;
+        y += ui::LINE;
     }
     let cursor = if (g.clock / 400) % 2 == 0 { "_" } else { " " };
     f.text(
@@ -244,7 +251,7 @@ pub fn render_names(g: &Game, f: &mut Frame, idx: usize, buf: &str) {
         gfx::YELLOW,
         Font::Normal,
     );
-    ui::footer(f, "Type a name, ENTER. (ENTER alone picks one.)");
+    ui::footer(f, "Type, ENTER. Just ENTER: pick");
 }
 
 pub fn names_key(g: &mut Game, idx: usize, mut buf: String, k: Key) -> Scene {
@@ -305,25 +312,19 @@ pub fn random_name(g: &mut Game) -> String {
 
 pub fn render_confirm_names(g: &Game, f: &mut Frame) {
     ui::header(f, "Your wagon party");
-    let mut y = 18;
+    let mut y = ui::TOP;
     for (i, p) in g.t.party.iter().enumerate() {
-        let role = if i == 0 { "  (leader)" } else { "" };
+        let role = if i == 0 { " (leader)" } else { "" };
         f.text(
-            12,
+            3,
             y,
             &format!("{}. {}{}", i + 1, p.name, role),
             gfx::WHITE,
             Font::Normal,
         );
-        y += 10;
+        y += ui::LINE;
     }
-    f.text(
-        3,
-        y + 10,
-        "Are these names correct? (Y/N)",
-        gfx::YELLOW,
-        Font::Normal,
-    );
+    f.text(3, y + 4, "All correct? (Y/N)", gfx::YELLOW, Font::Normal);
 }
 
 pub fn confirm_names_key(g: &mut Game, k: Key) -> Scene {
@@ -346,18 +347,11 @@ pub fn confirm_names_key(g: &mut Game, k: Key) -> Scene {
 
 pub fn render_month(g: &Game, f: &mut Frame) {
     ui::header(f, "When will you leave?");
-    let start = &g.data.landmarks[0].name;
-    let y = ui::para(
-        f,
-        3,
-        16,
-        &format!("It is {}. Choose the month to leave {start}.", g.data.year),
-        gfx::GRAY,
-    );
+    let _ = g;
     ui::menu(
         f,
         3,
-        y + 4,
+        ui::TOP,
         &["March", "April", "May", "June", "July", "Ask for advice"],
     );
 }
