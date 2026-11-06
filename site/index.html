@@ -103,7 +103,7 @@
   .screen-wrap { position: relative; }
   #screen {
     display: block;
-    width: min(840px, calc(100vw - 68px));
+    width: min(960px, calc(100vw - 68px));
     aspect-ratio: 240 / 135;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
@@ -272,7 +272,7 @@
   .shot figcaption { padding: 12px 14px 14px; font-size: 15px; color: var(--muted); }
   .shot figcaption b { display: block; font-family: var(--pixel); font-weight: 400; font-size: 11px; color: var(--ink); margin-bottom: 8px; }
 
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; }
   .card {
     background: var(--panel);
     border: 2px solid var(--line);
@@ -282,7 +282,8 @@
   .card h3 { font-family: var(--pixel); font-weight: 400; font-size: 13px; margin: 0 0 12px; line-height: 1.5; }
   .card p { margin: 0; color: var(--muted); }
   .card.gentle h3 { color: #9fe39a; }
-  .card.classic h3 { color: #ff9d7a; }
+  .card.classic h3 { color: #ffd166; }
+  .card.survival h3 { color: #ff6b5a; }
   .card .em { font-family: var(--crt); font-size: 22px; color: var(--ink); margin-top: 14px; }
 
   .hack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
@@ -458,7 +459,7 @@
         gathering wild food that changes with the place and the season.
       </p>
       <div class="shots">
-        <figure class="shot"><img src="shots/travel.png" alt="Wagon and oxen traveling across rainy plains, with date, weather, health and food" loading="lazy" width="480" height="270">
+        <figure class="shot"><img src="shots/travel.png" alt="Wagon and oxen traveling across green plains, with date, weather, health and food" loading="lazy" width="480" height="270">
           <figcaption><b>Hit the trail</b>Set your pace and rations, and watch the weather. Every day costs food.</figcaption></figure>
         <figure class="shot"><img src="shots/hunt.png" alt="Hunting mini-game: a hunter in a grassy field with trees and rocks" loading="lazy" width="480" height="270">
           <figcaption><b>Go hunting</b>Squirrels to buffalo. Walk, aim, fire. You can only carry 100 pounds back.</figcaption></figure>
@@ -480,7 +481,7 @@
 
   <section class="block">
     <div class="wrap">
-      <h2>Two kinds of pioneers</h2>
+      <h2>Three kinds of pioneers</h2>
       <p class="lede">Pick who's playing when the game starts. Same trail, same choices; only the bad news is different.</p>
       <div class="two">
         <div class="card gentle">
@@ -492,6 +493,11 @@
           <h3>Seasoned pioneers</h3>
           <p>The trail as it really was: cholera, deep rivers, and a tombstone by the trail for anyone you lose.</p>
           <p class="em">"Mary has died of dysentery."</p>
+        </div>
+        <div class="card survival">
+          <h3>Survival</h3>
+          <p>For experts. Almost everything goes wrong: more sickness, worse luck, colder weather and higher prices. Make it to Oregon and your points are tripled.</p>
+          <p class="em">"A thief steals 60 pounds of food."</p>
         </div>
       </div>
     </div>

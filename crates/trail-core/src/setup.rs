@@ -157,21 +157,30 @@ pub fn learn_key(_g: &mut Game, page: usize, k: Key) -> Scene {
 
 pub fn render_mood(_g: &Game, f: &mut Frame) {
     ui::header(f, "Who is going west?");
-    ui::menu(f, 3, ui::TOP, &["Younger pioneers", "Seasoned pioneers"]);
-    ui::para(f, 3, 58, "Younger: nobody dies.", gfx::GRAY);
-    ui::para(
+    let y = ui::menu(
         f,
         3,
-        80,
-        "Seasoned: the classic trail, with all its dangers.",
-        gfx::GRAY,
+        ui::TOP,
+        &["Younger pioneers", "Seasoned pioneers", "Survival"],
     );
+    let notes = [
+        ("Younger:", "nobody dies.", gfx::GREEN),
+        ("Seasoned:", "the real trail.", gfx::YELLOW),
+        ("Survival:", "it all goes wrong!", gfx::RED),
+    ];
+    let mut y = y + 6;
+    for (k, v, c) in notes {
+        let w = f.text(3, y, k, c, Font::Small);
+        f.text(3 + w + 8, y, v, gfx::GRAY, Font::Small);
+        y += 14;
+    }
 }
 
 pub fn mood_key(g: &mut Game, k: Key) -> Scene {
     let mood = match ui::digit(k) {
         Some(1) => Mood::Gentle,
         Some(2) => Mood::Classic,
+        Some(3) => Mood::Survival,
         _ => {
             return if k == Key::Escape {
                 Scene::Title

@@ -73,6 +73,17 @@ pub static HEART: Sprite = icon(&[
     "...rrr....",
     "....r.....",
 ]);
+pub static FLAME: Sprite = icon(&[
+    "....r.....",
+    "...rr..r..",
+    "..rrr.rr..",
+    "..rroorr..",
+    ".rrooyorr.",
+    ".rroyyorr.",
+    ".rooyyoor.",
+    "..rooyor..",
+    "...rrrr...",
+]);
 pub static BOLT: Sprite = icon(&[
     ".....yyy..",
     "....yyy...",
@@ -560,6 +571,7 @@ pub static PICKS: &[(&[&str], &Sprite)] = &[
     (&["^july"], &HOT_SUN),
     (&["younger"], &HEART),
     (&["seasoned"], &BOLT),
+    (&["survival"], &FLAME),
     (&["banker"], &MONEY),
     (&["carpenter"], &HAMMER),
     (&["farmer"], &WHEAT),

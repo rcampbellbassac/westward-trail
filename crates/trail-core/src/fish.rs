@@ -116,10 +116,10 @@ pub fn tick(g: &mut Game, mut s: Box<FishState>, ms: u32) -> Scene {
         Stage::Waiting(t) if t - dt <= 0 => {
             g.tune(&[(880, 40), (0, 30), (880, 40)]);
             s.note = String::from("A BITE! Press SPACE!");
-            Stage::Bite(if g.t.mood == crate::Mood::Gentle {
-                1100
-            } else {
-                750
+            Stage::Bite(match g.t.mood {
+                crate::Mood::Gentle => 1100,
+                crate::Mood::Classic => 750,
+                crate::Mood::Survival => 550,
             })
         }
         Stage::Waiting(t) => Stage::Waiting(t - dt),

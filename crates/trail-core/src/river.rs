@@ -93,13 +93,19 @@ pub fn render(g: &Game, f: &mut Frame, r: &RiverState) {
     let opts = options(g, r);
     let labels: Vec<&str> = opts.iter().map(|(_, s)| s.as_str()).collect();
     ui::menu_fit(f, 3, ui::HEAD_H + 2, &labels);
-    f.text(
-        3,
-        ui::FOOTER_Y,
-        &format!("{} ft wide, {} deep", r.width, depth_text(r.depth10)),
-        gfx::SKY,
-        Font::Small,
-    );
+    // Younger pioneers get told when a river is too deep to ford.
+    let (note, color) = if g.t.mood == Mood::Gentle && r.depth10 > 30 {
+        (
+            format!("{} deep: too deep to ford!", depth_text(r.depth10)),
+            gfx::ORANGE,
+        )
+    } else {
+        (
+            format!("{} ft wide, {} deep", r.width, depth_text(r.depth10)),
+            gfx::SKY,
+        )
+    };
+    f.text(3, ui::FOOTER_Y, &note, color, Font::Small);
 }
 
 fn render_crossing(g: &Game, f: &mut Frame, method: Method, ms: u32, name: &str) {
@@ -229,6 +235,8 @@ fn finish_crossing(g: &mut Game, r: &RiverState, method: Method) {
         Method::Ferry => (30, 0),
         Method::Guide => (50, 0),
     };
+    let rules = g.t.mood.rules();
+    let bad = (bad * rules.river / 100).min(950);
     if !g.rng.chance(bad) {
         g.say(title, "You made it safely across the river!");
         g.tune(&[(523, 80), (659, 80), (784, 160)]);
@@ -250,7 +258,7 @@ fn finish_crossing(g: &mut Game, r: &RiverState, method: Method) {
     };
     g.say(title.clone(), format!("{what} You lost {lost}."));
     g.beep(110, 300);
-    if g.t.mood == Mood::Classic && g.rng.chance(drown) {
+    if g.rng.chance(drown * rules.drown / 300) {
         let alive: Vec<usize> = (0..g.t.party.len())
             .filter(|&i| !g.t.party[i].gone)
             .collect();
@@ -277,7 +285,7 @@ fn lose_supplies(g: &mut Game) -> String {
     let clothes = g.t.sup.clothing.min(g.rng.range(0, 2) as u32);
     if clothes > 0 {
         g.t.sup.clothing -= clothes;
-        lost.push(format!("{clothes} sets of clothing"));
+        lost.push(ui::sets(clothes));
     }
     let ammo = g.t.sup.ammo.min(g.rng.range(0, 3) as u32 * 20);
     if ammo > 0 {

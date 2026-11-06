@@ -5,7 +5,12 @@ pub struct Rng(u64);
 
 impl Rng {
     pub fn new(seed: u64) -> Self {
-        Self((seed ^ 0x9E37_79B9_7F4A_7C15) | 1)
+        // Mix the seed (splitmix64) so neighboring seeds play differently: `| 1` alone made
+        // seeds 2n and 2n+1 the same game. The state must not be zero.
+        let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        Self((z ^ (z >> 31)) | 1)
     }
 
     /// The generator's whole state, for saved games.

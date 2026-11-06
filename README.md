@@ -12,8 +12,13 @@ project isn't affiliated with them. The code, text and pixel art here are origin
 
 ## What's in the game
 
-- Choose who's playing: **younger pioneers** (gentle: nobody dies, sick folks get a ride home) or
-  **seasoned pioneers** (the classic trail)
+- Choose who's playing: **younger pioneers** (gentle: nobody dies, sick folks get a ride home),
+  **seasoned pioneers** (the classic trail) or **survival** (almost everything goes wrong; points x3).
+  The numbers that make each mode harder are all in `Mood::rules` in `lib.rs`. Robot players check the balance:
+  `cargo test --release -p trail-core playtest -- --ignored --nocapture` prints how often a young kid, a kid who
+  reads and a careful adult reach Oregon in each mode, and `difficulty_stays_in_line` keeps it that way
+  (younger: a young kid always makes it; seasoned: about 9 in 10 for a kid, nearly always for a careful adult;
+  survival: about 4 in 10 for a careful adult)
 - Banker / carpenter / farmer, party names, leaving month, the general store
 - 17 landmarks from Independence to the Willamette Valley, forts with stores, talking to travelers
 - Weather, health, pace, rations, illnesses, injuries and ~18 kinds of random events

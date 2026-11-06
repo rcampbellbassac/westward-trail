@@ -82,7 +82,7 @@ pub fn arrive(g: &mut Game) -> Scene {
         _ => 200,
     };
     let people = g.t.alive_count();
-    let mut lines: Vec<(String, u32)> = alloc::vec![
+    let lines: Vec<(String, u32)> = alloc::vec![
         (
             format!("{people} people in {} health", ui::health_word(g.t.health)),
             people * points_for_health
@@ -93,23 +93,36 @@ pub fn arrive(g: &mut Game) -> Scene {
             format!("{} spare wagon parts", s.wheels + s.axles + s.tongues),
             (s.wheels + s.axles + s.tongues) * 2
         ),
-        (format!("{} sets of clothing", s.clothing), s.clothing * 2),
+        (ui::sets(s.clothing), s.clothing * 2),
         (format!("{} bullets", s.ammo), s.ammo / 50),
         (format!("{} pounds of food", s.food), s.food / 25),
         (format!("{} cash", ui::money(s.cash)), s.cash / 500),
     ];
+    // Only what earned points, so the list fits the screen.
+    let mut lines: Vec<(String, u32)> = lines.into_iter().filter(|(_, p)| *p > 0).collect();
     let subtotal: u32 = lines.iter().map(|(_, p)| p).sum();
     let bonus = g
         .data
         .occupations
         .get(g.t.occupation)
         .map_or(1, |o| o.bonus);
-    let total = subtotal.saturating_mul(bonus);
+    let hard = g.t.mood.rules().score;
+    let total = subtotal.saturating_mul(bonus).saturating_mul(hard);
     crate::net::finished(g, total);
-    lines.push((
-        format!("Bonus for being a {}: x{bonus}", occupation_short(g)),
-        0,
-    ));
+    let job = occupation_short(g);
+    let mut job_chars = job.chars();
+    let job: String = job_chars
+        .next()
+        .map(|c| c.to_ascii_uppercase())
+        .into_iter()
+        .chain(job_chars)
+        .collect();
+    let bonus_line = if hard > 1 {
+        format!("{job} x{bonus}, survival x{hard}")
+    } else {
+        format!("{job} bonus: x{bonus}")
+    };
+    lines.push((bonus_line, 0));
     lines.push((String::from("TOTAL"), total));
 
     let mut name =
@@ -148,32 +161,42 @@ fn occupation_short(g: &Game) -> String {
 }
 
 pub fn render_score(g: &Game, f: &mut Frame, lines: &[(String, u32)]) {
-    ui::header(f, "Your points");
-    // Small letters: the list of points can be long.
+    // The total goes in the title bar and the rating in the footer, so a long list fits.
+    let total = lines
+        .iter()
+        .find(|(l, _)| l == "TOTAL")
+        .map_or(0, |(_, p)| *p);
+    ui::header(f, &format!("Points: {total}"));
     let mut y = ui::HEAD_H + 2;
-    for (label, pts) in lines {
-        let total = label == "TOTAL";
-        let (c, font) = if total {
-            (gfx::YELLOW, Font::Normal)
-        } else {
-            (gfx::WHITE, Font::Small)
-        };
-        let label: String = label.chars().take(22).collect();
-        f.text(3, y, &label, c, font);
-        if *pts > 0 || total {
+    for (label, pts) in lines.iter().filter(|(l, _)| l != "TOTAL") {
+        let label: String = label.chars().take(23).collect();
+        f.text(3, y, &label, gfx::WHITE, Font::Small);
+        if *pts > 0 {
             let n = format!("{pts}");
-            let x = W - 3 - n.len() as i32 * font.char_w();
-            f.text(x, y, &n, c, font);
+            let x = W - 3 - n.len() as i32 * Font::Small.char_w();
+            f.text(x, y, &n, gfx::YELLOW, Font::Small);
         }
-        y += font.line_h();
+        y += 12;
     }
-    if let Some((_, total)) = lines.last() {
-        f.text(3, y + 2, rating(*total), gfx::GREEN, Font::Normal);
+    if g.cheats.used && y + 13 <= ui::FOOTER_Y {
+        f.text(3, y, "HACKER MODE", gfx::GREEN, Font::Small);
     }
-    if g.cheats.used {
-        f.text(140, y + 4, "HACKER MODE", gfx::GREEN, Font::Small);
-    }
-    ui::footer(f, "Any key: the Top Ten");
+    let rate = rating(total);
+    f.text(
+        3,
+        ui::FOOTER_Y,
+        &format!("{rate}!"),
+        gfx::GREEN,
+        Font::Small,
+    );
+    let w = (rate.len() as i32 + 2) * Font::Small.char_w();
+    f.text(
+        3 + w,
+        ui::FOOTER_Y,
+        "Any key: Top Ten",
+        gfx::GRAY,
+        Font::Small,
+    );
 }
 
 pub fn after_score(g: &mut Game, lines: &[(String, u32)]) -> Scene {
@@ -251,7 +274,11 @@ pub fn game_over(g: &mut Game) -> Scene {
     } else {
         g.say(
             "The trail is over",
-            "Everyone in your party has died. The trail to Oregon is a hard one.",
+            if g.t.mood == Mood::Survival {
+                "Everyone in your party has died. Survival is the hardest trail of all."
+            } else {
+                "Everyone in your party has died. The trail to Oregon is a hard one."
+            },
         );
     }
     Scene::GameOver

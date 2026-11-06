@@ -1413,11 +1413,36 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "prints hits per skill over many races"]
+    fn computer_racer_hit_table() {
+        for kind in [Kind::Wagon, Kind::Foot, Kind::Sled] {
+            let mut t = [0u32; 3];
+            for seed in 1..=64 {
+                for (skill, n) in computer_hits(kind, seed) {
+                    t[match skill {
+                        Skill::Good => 0,
+                        Skill::Fair => 1,
+                        Skill::Easy => 2,
+                    }] += n;
+                }
+            }
+            extern crate std;
+            std::println!(
+                "{}: per 64 races good {} fair {} easy {}",
+                kind.name(),
+                t[0],
+                t[1],
+                t[2]
+            );
+        }
+    }
+
+    #[test]
     fn computer_racers_mostly_dodge_and_jump() {
         for kind in [Kind::Wagon, Kind::Foot, Kind::Sled] {
             let total = |want: Skill| -> u32 {
                 let mut hits = 0;
-                for seed in 1..=8 {
+                for seed in 1..=32 {
                     for (skill, n) in computer_hits(kind, seed) {
                         if skill == want {
                             hits += n;
@@ -1426,12 +1451,13 @@ mod tests {
                 }
                 hits
             };
-            // Eight races each: a good racer hits about one thing a race at most.
+            // 32 races each: a good racer hits about one thing a race, the others a bit more.
             let (good, fair, easy) = (total(Skill::Good), total(Skill::Fair), total(Skill::Easy));
             let name = kind.name();
-            assert!(good <= 10, "{name}: a good racer hit {good} things");
-            assert!(fair <= 16, "{name}: a fair racer hit {fair} things");
-            assert!(easy <= 24, "{name}: an easy racer hit {easy} things");
+            assert!(good <= 40, "{name}: a good racer hit {good} things");
+            assert!(fair <= 56, "{name}: a fair racer hit {fair} things");
+            assert!(easy <= 80, "{name}: an easy racer hit {easy} things");
+            assert!(good <= easy, "{name}: good {good} vs easy {easy}");
         }
     }
 

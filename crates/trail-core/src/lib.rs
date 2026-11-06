@@ -25,6 +25,8 @@ mod icons;
 mod net;
 mod party;
 mod pictures;
+#[cfg(test)]
+mod playtest;
 mod races;
 mod raft;
 mod river;
@@ -87,10 +89,99 @@ pub(crate) struct Held {
 }
 
 /// Gentle is for younger pioneers: nobody dies, they go home to rest.
+/// Survival is for experts: almost everything goes wrong.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Mood {
     Gentle,
     Classic,
+    Survival,
+}
+
+/// How hard the trail is. Every number that differs between the modes lives here.
+pub(crate) struct Rules {
+    /// Chance of a random event on a travel day, out of 1000.
+    pub event: u32,
+    /// Catching an illness, in percent of the classic chance.
+    pub sick: u32,
+    /// Dying of an illness, in percent of the classic chance.
+    pub die: u32,
+    /// How much of the day's hardship is still there tomorrow when traveling, in percent.
+    pub keep: u32,
+    /// Food eaten, in percent.
+    pub eat: u32,
+    /// Weight of the bad random events, in percent.
+    pub bad: u32,
+    /// Weight of the lucky ones, in percent.
+    pub good: u32,
+    /// River crossing mishaps, in percent.
+    pub river: u32,
+    /// Chance someone drowns when the wagon tips over, out of 1000.
+    pub drown: u32,
+    /// Chance each day that a sick person dies however healthy the party is, out of 1000.
+    pub fatal: u32,
+    /// Chance each day that someone brings oxen when you have none, out of 1000.
+    pub rescue: u32,
+    /// Store prices, in percent.
+    pub prices: u32,
+    /// Degrees colder than usual.
+    pub cold: i32,
+    /// Points at the end are multiplied by this.
+    pub score: u32,
+}
+
+impl Mood {
+    pub(crate) fn rules(self) -> Rules {
+        match self {
+            Mood::Gentle => Rules {
+                event: 70,
+                sick: 50,
+                die: 50,
+                keep: 88,
+                eat: 100,
+                bad: 100,
+                good: 100,
+                river: 100,
+                drown: 0,
+                fatal: 0,
+                rescue: 400,
+                prices: 100,
+                cold: 0,
+                score: 1,
+            },
+            Mood::Classic => Rules {
+                event: 190,
+                sick: 160,
+                die: 160,
+                keep: 90,
+                eat: 100,
+                bad: 100,
+                good: 100,
+                river: 120,
+                drown: 300,
+                fatal: 8,
+                rescue: 120,
+                prices: 100,
+                cold: 0,
+                score: 1,
+            },
+            Mood::Survival => Rules {
+                event: 380,
+                sick: 280,
+                die: 250,
+                keep: 93,
+                eat: 140,
+                bad: 200,
+                good: 30,
+                river: 160,
+                drown: 450,
+                fatal: 16,
+                rescue: 60,
+                prices: 135,
+                cold: 10,
+                score: 3,
+            },
+        }
+    }
 }
 
 pub(crate) struct Person {
@@ -144,6 +235,8 @@ pub(crate) struct Trip {
     pub ox_lame: u32,
     pub temp: i32,
     pub precip: Precip,
+    /// Already told the party the food ran out (until they get some more).
+    pub food_warned: bool,
 }
 
 impl Trip {
@@ -164,6 +257,7 @@ impl Trip {
             ox_lame: 0,
             temp: 60,
             precip: Precip::Clear,
+            food_warned: false,
         }
     }
 
@@ -403,6 +497,11 @@ impl Game {
         party::overlay(self, f);
         f.apply_theme(self.cheats.theme);
         party::share(self, f);
+    }
+
+    /// A message box is showing (ENTER moves it along).
+    pub fn showing_message(&self) -> bool {
+        !self.msgs.is_empty()
     }
 
     /// Notes to play since the last call.

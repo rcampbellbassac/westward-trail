@@ -196,7 +196,6 @@ pub fn landmark(g: &Game, f: &mut Frame, idx: usize, top: i32, h: i32) {
             dome(f, 120, base, 40, 16, gfx::GRAY);
         }
     }
-    f.label(3, top + 2, &l.name, gfx::WHITE, gfx::BLACK, Font::Small);
 }
 
 /// Oxen in front (west, to the left), wagon behind. `y` is the wagon's top.

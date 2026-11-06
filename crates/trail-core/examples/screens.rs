@@ -30,6 +30,16 @@ fn keys(g: &mut Game, ks: &[Key]) {
     }
 }
 
+/// Press ENTER until no message is showing (messages run to more pages with big letters).
+fn clear(g: &mut Game) {
+    for _ in 0..50 {
+        if !g.showing_message() {
+            return;
+        }
+        keys(g, &[Key::Enter]);
+    }
+}
+
 fn typed(g: &mut Game, s: &str) {
     for c in s.chars() {
         keys(g, &[Key::Char(c)]);
@@ -58,13 +68,18 @@ fn main() {
         &[Key::Enter, Key::Enter, Key::Char('y'), Key::Char('2')],
     );
     save(&g, dir, "03_message");
-    keys(&mut g, &[Key::Enter, Key::Enter]);
+    clear(&mut g);
     for (item, qty) in [('1', "3"), ('2', "800"), ('3', "8"), ('4', "4"), ('5', "1")] {
         keys(&mut g, &[Key::Char(item)]);
         typed(&mut g, qty);
+        clear(&mut g);
+    }
+    for _ in 0..12 {
+        g.tick(250); // let the "You have..." note fade
     }
     save(&g, dir, "04_store");
-    keys(&mut g, &[Key::Enter, Key::Enter]);
+    keys(&mut g, &[Key::Enter]);
+    clear(&mut g);
     save(&g, dir, "05_sizeup");
     keys(&mut g, &[Key::Char('1')]);
     for _ in 0..12 {
@@ -110,19 +125,22 @@ fn main() {
         &mut g,
         &[Key::Enter, Key::Enter, Key::Enter, Key::Enter, Key::Enter],
     );
-    keys(
-        &mut g,
-        &[Key::Char('y'), Key::Char('2'), Key::Enter, Key::Enter],
-    );
+    keys(&mut g, &[Key::Char('y'), Key::Char('2')]);
+    clear(&mut g);
     for (item, qty) in [('1', "3"), ('2', "600")] {
         keys(&mut g, &[Key::Char(item)]);
         typed(&mut g, qty);
+        clear(&mut g);
     }
-    keys(&mut g, &[Key::Enter, Key::Enter]);
+    keys(&mut g, &[Key::Enter]);
+    clear(&mut g);
+    for _ in 0..12 {
+        g.tick(250);
+    }
     save(&g, dir, "12_sizeup_new");
     keys(&mut g, &[Key::Char('g')]);
     save(&g, dir, "13_gather_warning");
-    keys(&mut g, &[Key::Enter, Key::Enter]);
+    clear(&mut g);
     // Wander until the forager stands next to a plant (its name label shows up).
     let label = gfx::rgb(20, 40, 15).into_storage();
     let mut f = Frame::new();
@@ -145,16 +163,9 @@ fn main() {
     save(&g, dir, "14_gather");
     keys(&mut g, &[Key::Escape]);
     save(&g, dir, "15_gather_done");
-    keys(
-        &mut g,
-        &[
-            Key::Enter,
-            Key::Enter,
-            Key::Enter,
-            Key::Char('s'),
-            Key::Char('2'),
-        ],
-    );
+    clear(&mut g);
+    keys(&mut g, &[Key::Char('s'), Key::Char('2')]);
+    clear(&mut g);
     keys(&mut g, &[Key::Char('s')]);
     save(&g, dir, "16_slots");
     println!("saved screenshots to {}", dir.display());

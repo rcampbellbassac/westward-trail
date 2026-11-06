@@ -74,7 +74,8 @@ pub fn sim_day(g: &mut Game, mode: DayMode) {
     weather(g);
 
     let eaters = g.t.alive_count();
-    let need = eaters * [3, 2, 1][g.t.rations.min(2)];
+    let rules = g.t.mood.rules();
+    let need = pct(eaters * [3, 2, 1][g.t.rations.min(2)], rules.eat);
     let starving = g.t.sup.food < need;
     g.t.sup.food = g.t.sup.food.saturating_sub(need);
 
@@ -98,7 +99,11 @@ pub fn sim_day(g: &mut Game, mode: DayMode) {
         add += 2;
     }
     add += g.t.alive().filter(|p| p.sick.is_some()).count() as u32;
-    let keep = if mode == DayMode::Rest { 75 } else { 88 };
+    let keep = if mode == DayMode::Rest {
+        75
+    } else {
+        rules.keep
+    };
     g.t.health = (pct(g.t.health, keep) + add).min(200);
 
     if g.t.ox_lame > 0 {
@@ -109,6 +114,43 @@ pub fn sim_day(g: &mut Game, mode: DayMode) {
         };
     }
     illness(g);
+    rescue_oxen(g, &rules);
+    food_warning(g);
+}
+
+/// Say so when the food runs out, once, with what to do about it.
+fn food_warning(g: &mut Game) {
+    if g.t.sup.food >= 50 {
+        g.t.food_warned = false;
+    }
+    if g.t.sup.food > 0 || g.t.food_warned || g.t.alive_count() == 0 {
+        return;
+    }
+    g.t.food_warned = true;
+    let text = if gentle(g) {
+        "You're out of food! Everyone is hungry. Press H to hunt, F to fish at a river, G to gather, or buy food at a fort."
+    } else {
+        "You have run out of food. Hungry people get sick. Hunt, fish, gather, trade or buy food at a fort."
+    };
+    g.say("Out of food!", text);
+    g.beep(220, 200);
+}
+
+/// Stuck without oxen (and maybe nothing to trade): sooner or later someone helps,
+/// so a trip can't get stuck forever.
+fn rescue_oxen(g: &mut Game, rules: &crate::Rules) {
+    if g.t.sup.oxen > 0 || g.t.alive_count() == 0 || !g.rng.chance(rules.rescue) {
+        return;
+    }
+    let n = if gentle(g) { 2 } else { 1 };
+    g.t.sup.oxen = n;
+    let text = if gentle(g) {
+        "A kind farmer heading west lends you 2 oxen. \"Pay me back in Oregon!\""
+    } else {
+        "A family whose wagon broke down gives you their last ox. It's slow, but you can move again."
+    };
+    g.say(ui::date(g), text);
+    g.tune(&[(523, 80), (659, 80), (784, 160)]);
 }
 
 fn weather(g: &mut Game) {
@@ -123,7 +165,7 @@ fn weather(g: &mut Game) {
         Terrain::Hills => -3,
         Terrain::Plains => 0,
     };
-    g.t.temp = BASE[m] + adj + g.rng.range(-8, 8);
+    g.t.temp = BASE[m] + adj + g.rng.range(-8, 8) - g.t.mood.rules().cold;
     let wet = if t == Terrain::Desert {
         WET[m] * 2 / 5
     } else {
@@ -141,6 +183,7 @@ fn weather(g: &mut Game) {
 fn illness(g: &mut Game) {
     let h = g.t.health;
     let gentle = gentle(g);
+    let rules = g.t.mood.rules();
     for i in 0..g.t.party.len() {
         if g.t.party[i].gone {
             continue;
@@ -162,17 +205,12 @@ fn illness(g: &mut Game) {
             } else {
                 0
             };
-            if gentle {
-                die /= 2;
-            }
+            die = die * rules.die / 100 + rules.fatal;
             if g.rng.chance(die) {
                 lose_person(g, i, &what);
             }
         } else {
-            let mut odds = 2 + h / 5;
-            if gentle {
-                odds /= 2;
-            }
+            let odds = (2 + h / 5) * rules.sick / 100;
             if g.rng.chance(odds) {
                 let k = g.rng.below(g.data.illnesses.len() as u32) as usize;
                 let ill = &g.data.illnesses[k];
@@ -188,9 +226,10 @@ fn illness(g: &mut Game) {
             }
         }
     }
-    if h >= 140
+    let survival = g.t.mood == Mood::Survival;
+    if h >= if survival { 120 } else { 140 }
         && !gentle
-        && g.rng.chance(10)
+        && g.rng.chance(if survival { 15 } else { 10 })
         && let Some(i) = someone(g)
     {
         lose_person(g, i, "exhaustion");
@@ -323,9 +362,15 @@ pub fn arrive_at(g: &mut Game, idx: usize) -> Scene {
             Scene::Dalles
         }
         Kind::Fort | Kind::Town => {
+            let need = g.t.alive_count() * 3 * 14;
+            let hint = if g.t.sup.food < need {
+                " You're low on food: pick Buy to get some!"
+            } else {
+                ""
+            };
             g.say_pic(
                 name.clone(),
-                format!("You are now at {name}. There's a store here."),
+                format!("You are now at {name}. There's a store here.{hint}"),
                 Pic::Landmark(idx),
             );
             Scene::SizeUp
@@ -345,7 +390,8 @@ pub fn arrive_at(g: &mut Game, idx: usize) -> Scene {
 
 fn random_event(g: &mut Game) {
     let gentle = gentle(g);
-    if !g.rng.chance(if gentle { 70 } else { 100 }) {
+    let rules = g.t.mood.rules();
+    if !g.rng.chance(rules.event) {
         return;
     }
     let t = terrain(g);
@@ -393,6 +439,16 @@ fn random_event(g: &mut Game) {
         2,                              // 16 fire
         4,                              // 17 just for fun
     ];
+    // Lucky events (fruit, an abandoned wagon, a kind family, fun) and bad ones scale by mode.
+    let weights: Vec<u32> = weights
+        .iter()
+        .enumerate()
+        .map(|(i, &w)| match i {
+            13..=15 => w * rules.good / 100,
+            17 => w,
+            _ => w * rules.bad / 100,
+        })
+        .collect();
     let Some(event) = g.rng.weighted(&weights) else {
         return;
     };
@@ -409,13 +465,15 @@ fn random_event(g: &mut Game) {
                 1 if s.clothing > 0 => {
                     let n = s.clothing.min(g.rng.range(1, 2) as u32);
                     s.clothing -= n;
-                    format!("{n} sets of clothing")
+                    ui::sets(n)
                 }
-                _ => {
+                _ if s.food >= 10 => {
                     let n = s.food * g.rng.range(10, 25) as u32 / 100;
                     s.food -= n;
                     format!("{n} pounds of food")
                 }
+                // Nothing worth taking.
+                _ => return,
             };
             if gentle {
                 g.say(
@@ -500,7 +558,7 @@ fn random_event(g: &mut Game) {
             } else {
                 "Lost trail"
             };
-            g.say(date, format!("{what}. Lose {n} days."));
+            g.say(date, format!("{what}. Lose {}.", ui::days(n)));
             pass_days(g, n, DayMode::Busy);
         }
         7 => {
@@ -558,7 +616,7 @@ fn random_event(g: &mut Game) {
                 found.push_str(&format!(", {ammo} bullets"));
             }
             if clothes > 0 {
-                found.push_str(&format!(", {clothes} sets of clothing"));
+                found.push_str(&format!(", {}", ui::sets(clothes)));
             }
             g.say(
                 date,
@@ -1095,7 +1153,7 @@ pub fn rest_key(g: &mut Game, mut buf: String, k: Key) -> Scene {
             if g.t.alive_count() == 0 {
                 return score::game_over(g);
             }
-            g.say("Rest", format!("You rested for {days} days."));
+            g.say("Rest", format!("You rested for {}.", ui::days(days)));
             return Scene::SizeUp;
         }
         _ => {}
@@ -1125,7 +1183,7 @@ fn item_text(item: Item, n: u32) -> String {
     match item {
         Item::Oxen => format!("{n} oxen"),
         Item::Food => format!("{n} pounds of food"),
-        Item::Clothing => format!("{n} sets of clothing"),
+        Item::Clothing => ui::sets(n),
         Item::Ammo => format!("{n} bullets"),
         Item::Wheel => format!("{n} wagon wheel"),
         Item::Axle => format!("{n} wagon axle"),

@@ -71,10 +71,10 @@ pub fn to_text(g: &Game) -> String {
     );
     kv(
         "mood",
-        String::from(if t.mood == Mood::Gentle {
-            "gentle"
-        } else {
-            "classic"
+        String::from(match t.mood {
+            Mood::Gentle => "gentle",
+            Mood::Classic => "classic",
+            Mood::Survival => "survival",
         }),
     );
     kv("occupation", format!("{}", t.occupation));
@@ -168,10 +168,10 @@ pub fn from_text(g: &Game, text: &str) -> Result<(Trip, bool, u64), String> {
             }
             "trail" => trail_ok = v == clean(&trail_id(g)),
             "mood" => {
-                t.mood = if v == "gentle" {
-                    Mood::Gentle
-                } else {
-                    Mood::Classic
+                t.mood = match v {
+                    "gentle" => Mood::Gentle,
+                    "survival" => Mood::Survival,
+                    _ => Mood::Classic,
                 }
             }
             "occupation" => t.occupation = (num()? as usize).min(g.data.occupations.len() - 1),

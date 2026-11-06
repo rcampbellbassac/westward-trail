@@ -147,7 +147,12 @@ fn pick(g: &mut Game, s: &mut ForageState) {
     let (name, poison, looks_like) = (plant.name.clone(), plant.poison, plant.looks_like.clone());
     if poison {
         // Little pioneers always get warned. Seasoned ones notice half the time.
-        if g.t.mood == Mood::Gentle || g.rng.chance(500) {
+        let notice = match g.t.mood {
+            Mood::Gentle => 1000,
+            Mood::Classic => 500,
+            Mood::Survival => 250,
+        };
+        if g.rng.chance(notice) {
             let like = if looks_like.is_empty() {
                 String::new()
             } else {

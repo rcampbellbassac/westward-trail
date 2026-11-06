@@ -56,6 +56,41 @@ impl RaftState {
     }
 }
 
+impl RaftState {
+    /// Robot players: (raft x, the x it would be safest to steer to).
+    #[cfg(test)]
+    pub(crate) fn bot_target(&self) -> (i32, i32) {
+        let rw = sprites::RAFT.w();
+        let here = self.dist / FP;
+        let ahead: Vec<i32> = self
+            .rocks
+            .iter()
+            .filter(|&&(_, y)| y > here - 6 && y < here + 60)
+            .map(|&(x, _)| x)
+            .collect();
+        let (l1, r1) = banks(here);
+        let (l2, r2) = banks(here + 40);
+        let (l, r) = (l1.max(l2) + 2, r1.min(r2) - rw - 2);
+        let rx = self.x / FP;
+        let mut best = (i32::MIN, rx);
+        let mut x = l;
+        while x <= r.max(l) {
+            let rock = ahead
+                .iter()
+                .map(|&k| (k + 4 - (x + rw / 2)).abs())
+                .min()
+                .unwrap_or(99);
+            let bank = (x - l).min(r - x) * 2;
+            let score = rock.min(30) * 4 + bank.min(20) - (x - rx).abs() / 4;
+            if score > best.0 {
+                best = (score, x);
+            }
+            x += 2;
+        }
+        (rx, best.1)
+    }
+}
+
 /// The river scrolls downward: things farther along appear at the top.
 fn screen_y(s: &RaftState, world_y: i32) -> i32 {
     RAFT_Y - (world_y - s.dist / FP)
@@ -70,7 +105,12 @@ fn crash(g: &mut Game, s: &mut RaftState) {
     if food > 0 {
         s.lost.push(format!("{food} lbs of food"));
     }
-    if s.hits >= 3 && g.t.mood == Mood::Classic && g.rng.chance(300) {
+    let (after, odds) = match g.t.mood {
+        Mood::Gentle => (u32::MAX, 0),
+        Mood::Classic => (3, 300),
+        Mood::Survival => (2, 400),
+    };
+    if s.hits >= after && g.rng.chance(odds) {
         let alive: Vec<usize> = (0..g.t.party.len())
             .filter(|&i| !g.t.party[i].gone)
             .collect();
@@ -110,6 +150,11 @@ pub fn tick(g: &mut Game, mut s: Box<RaftState>, ms: u32) -> Scene {
     if s.dist / FP >= RIVER_LEN {
         let body = if s.hits == 0 {
             String::from("You steered past every rock. What a ride!")
+        } else if s.lost.is_empty() {
+            format!(
+                "You bumped into rocks {} times, but nothing fell out.",
+                s.hits
+            )
         } else {
             format!(
                 "You bumped into rocks {} times and lost {}.",

@@ -21,6 +21,21 @@ const statusEl = document.getElementById("status");
 const embedded = canvas.hasAttribute("data-embedded");
 const focusGame = () => canvas.focus({ preventScroll: true });
 
+// The web isn't stuck with the Cardputer's tiny screen: show the game as big as the window
+// allows, in whole multiples of 240x135 so every game pixel is the same size and crisp.
+function fitScreen() {
+  const touch = matchMedia("(pointer: coarse)").matches;
+  let room = Math.min(embedded ? 1060 : 1920, innerWidth - 68);
+  if (!embedded && !touch) {
+    // Leave room for the buttons and hint below the screen on the play page.
+    room = Math.min(room, ((innerHeight - 170) * 240) / 135);
+  }
+  const k = Math.floor(room / 240);
+  canvas.style.width = (k >= 2 ? k * 240 : Math.max(200, room)) + "px";
+}
+addEventListener("resize", fitScreen);
+fitScreen();
+
 let wasm, image;
 const enc = new TextEncoder();
 const dec = new TextDecoder();

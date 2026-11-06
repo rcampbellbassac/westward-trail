@@ -49,7 +49,7 @@ fn price(g: &Game, item: usize) -> u32 {
         _ => p.part,
     };
     let markup = 100 + g.t.miles * 100 / g.data.trail_length();
-    base.saturating_mul(markup) / 100
+    base.saturating_mul(markup) / 100 * g.t.mood.rules().prices / 100
 }
 
 fn unit(item: usize) -> &'static str {

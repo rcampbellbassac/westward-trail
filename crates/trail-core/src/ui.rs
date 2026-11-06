@@ -101,6 +101,24 @@ pub fn no(k: Key) -> bool {
     matches!(k, Key::Char('n' | 'N') | Key::Escape)
 }
 
+/// "1 set of clothing", "3 sets of clothing".
+pub fn sets(n: u32) -> String {
+    if n == 1 {
+        String::from("1 set of clothing")
+    } else {
+        format!("{n} sets of clothing")
+    }
+}
+
+/// "1 day", "3 days".
+pub fn days(n: u32) -> String {
+    if n == 1 {
+        String::from("1 day")
+    } else {
+        format!("{n} days")
+    }
+}
+
 pub fn money(cents: u32) -> String {
     format!("${}.{:02}", cents / 100, cents % 100)
 }
@@ -216,7 +234,6 @@ pub fn msg_pages(m: &Msg) -> usize {
 }
 
 pub fn render_msg(g: &Game, f: &mut Frame, m: &Msg) {
-    header(f, &m.title);
     let (lines, cap) = msg_lines(m);
     let mut y = if matches!(m.pic, Pic::None) {
         TOP
@@ -228,6 +245,8 @@ pub fn render_msg(g: &Game, f: &mut Frame, m: &Msg) {
         Pic::Landmark(i) => pictures::landmark(g, f, *i, MSG_PIC_TOP, MSG_PIC_H),
         Pic::Tomb(name) => pictures::tomb(f, name, MSG_PIC_TOP, MSG_PIC_H),
     }
+    // After the picture, so a tall flag or rock doesn't poke into the title.
+    header(f, &m.title);
     for line in lines.iter().skip(m.page * cap).take(cap) {
         f.text(3, y, line, gfx::WHITE, Font::Normal);
         y += LINE;

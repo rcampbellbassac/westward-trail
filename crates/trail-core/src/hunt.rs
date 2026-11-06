@@ -160,6 +160,18 @@ impl HuntState {
         self.hunters.iter().map(|h| (h.x / FP, h.y / FP)).collect()
     }
 
+    /// Robot players: from our hunter to the nearest animal still standing, in pixels.
+    #[cfg(test)]
+    pub(crate) fn bot_view(&self) -> Option<(i32, i32)> {
+        let me = &self.hunters[0];
+        let (cx, cy) = (me.x / FP + 4, me.y / FP + 6);
+        self.beasts
+            .iter()
+            .filter(|b| !b.dead && b.x > 0 && b.x / FP < W)
+            .map(|b| (b.x / FP + 6 - cx, b.y / FP + 4 - cy))
+            .min_by_key(|(dx, dy)| dx * dx + dy * dy)
+    }
+
     fn lbs(&self) -> u32 {
         self.hunters.iter().map(|h| h.lbs).sum()
     }
